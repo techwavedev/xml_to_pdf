@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Resume xmlns="http://ns.hr-xml.org/2007-04-15" version="3.0">
+  <StructuredXMLResume>
+    <ContactInfo>
+      <PersonName>
+        <GivenName>John</GivenName>
+        <FamilyName>Doe</FamilyName>
+      </PersonName>
+      <ContactMethod>
+        <Telephone>+1-555-0199</Telephone>
+        <InternetEmailAddress>john.doe@example.com</InternetEmailAddress>
+        <Location>San Francisco, CA, USA</Location>
+        <InternetWebAddress>https://linkedin.com/in/johndoe</InternetWebAddress>
+      </ContactMethod>
+    </ContactInfo>
+
+    <ExecutiveSummary>
+      Senior Software Engineer with 8+ years of experience specializing in distributed systems, Python, cloud infrastructure (AWS/GCP), and machine learning applications. Proven track record of scaling high-throughput APIs and leading engineering teams.
+    </ExecutiveSummary>
+
+    <CoreCompetencies>
+      <Skill>Python</Skill>
+      <Skill>Go</Skill>
+      <Skill>JavaScript</Skill>
+      <Skill>TypeScript</Skill>
+      <Skill>React</Skill>
+      <Skill>FastAPI</Skill>
+      <Skill>Docker</Skill>
+      <Skill>Kubernetes</Skill>
+      <Skill>PostgreSQL</Skill>
+      <Skill>Redis</Skill>
+      <Skill>AWS</Skill>
+      <Skill>Google Cloud Platform</Skill>
+      <Skill>CI/CD</Skill>
+      <Skill>System Architecture</Skill>
+    </CoreCompetencies>
+
+    <EmploymentHistory>
+      <EmployerOrg>
+        <EmployerOrgName>Tech Solutions Inc.</EmployerOrgName>
+        <PositionHistory>
+          <Title>Staff Software Engineer</Title>
+          <StartDate>2021-03</StartDate>
+          <EndDate>Present</EndDate>
+          <Description>
+            - Architected microservices platform processing over 10M requests daily.
+            - Reduced API latency by 45% using Redis caching and asynchronous job queues.
+            - Mentored 6 junior/mid-level engineers and established CI/CD best practices.
+          </Description>
+        </PositionHistory>
+      </EmployerOrg>
+      <EmployerOrg>
+        <EmployerOrgName>DataDriven Labs</EmployerOrgName>
+        <PositionHistory>
+          <Title>Senior Software Engineer</Title>
+          <StartDate>2018-06</StartDate>
+          <EndDate>2021-02</EndDate>
+          <Description>
+            - Developed real-time data pipelines using Kafka and Python.
+            - Integrated machine learning models into production REST services.
+          </Description>
+        </PositionHistory>
+      </EmployerOrg>
+    </EmploymentHistory>
+
+    <EducationHistory>
+      <EducationOrganization>
+        <SchoolName>University of California, Berkeley</SchoolName>
+        <Degree>Bachelor of Science in Computer Science</Degree>
+        <CompletionDate>2018-05</CompletionDate>
+      </EducationOrganization>
+    </EducationHistory>
+
+    <Certifications>
+      <Certification>AWS Certified Solutions Architect - Associate</Certification>
+      <Certification>Google Cloud Professional Data Engineer</Certification>
+    </Certifications>
+  </StructuredXMLResume>
+</Resume>
