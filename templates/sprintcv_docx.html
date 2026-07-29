@@ -7,9 +7,6 @@
         @page {
             size: A4;
             margin: 12mm 12mm 15mm 12mm;
-            @bottom-center {
-                content: element(footer);
-            }
         }
         * {
             box-sizing: border-box;
@@ -274,18 +271,6 @@
             padding: 4px 10px;
             border-radius: 3px;
         }
-
-        /* Page Footer Container */
-        .footer-bar {
-            margin-top: 30px;
-            text-align: center;
-            padding-top: 10px;
-            padding-bottom: 5px;
-        }
-        .footer-logo {
-            height: 22px;
-            object-fit: contain;
-        }
     </style>
 </head>
 <body>
@@ -466,13 +451,6 @@
         <div class="industry-badge">Banking</div>
         <div class="industry-badge">Education Management</div>
         <div class="industry-badge">Marketing and Advertising</div>
-    </div>
-
-    <!-- SprintCV Logo Footer -->
-    <div class="footer-bar">
-        {% if logo_b64 %}
-        <img class="footer-logo" src="data:image/png;base64,{{ logo_b64 }}" alt="SprintCV Logo">
-        {% endif %}
     </div>
 
 </body>
