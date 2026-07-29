@@ -2,24 +2,27 @@
 """
 cv_builder.py
 -------------------------------------------------------------------------
-Gerador de Currículos PDF a partir de JSON com Suporte a Múltiplos Templates Gráficos 
-(HTML/CSS e arquivos .docx nativos) e Incorporação Automática de Metadados ATS XML.
+Gerador de Currículos PDF a partir de JSON com Suporte Multiplataforma 
+(macOS, Windows, Linux) a Templates DOCX e HTML/CSS, com Incorporação ATS HR-XML.
 
 Fluxo:
  1. Carrega os dados do CV em formato JSON (base única de dados).
  2. Converte automaticamente o JSON para HR-XML (padrão internacional ATS).
- 3. Se for fornecido um arquivo .docx como template:
-    - Remove automaticamente todas as logos/imagens do rodapé (ex: logo SprintCV).
-    - Converte o .docx nativo em PDF usando o Microsoft Word do macOS (100% de fidelidade visual exata).
+ 3. Se for fornecido um arquivo .docx de entrada (--docx):
+    - Limpa automaticamente as logos/imagens do rodapé (ex: logo SprintCV).
+    - Converte o .docx nativo em PDF com 100% de fidelidade (MS Word no Windows/macOS, LibreOffice no Linux/Windows/Mac).
     - Caso contrário, renderiza o template gráfico HTML/CSS escolhido via Playwright (Chromium).
- 4. Injeta o XML gerado no PDF (anexo, metadados XMP e dicionário /Info).
- 5. Salva o PDF otimizado para ATS na pasta output/.
+ 4. O resultado final gerado é SEMPRE um arquivo PDF (.pdf) salvo em output/.
+ 5. Injeta o XML gerado no PDF (anexo, metadados XMP e dicionário /Info).
+ 6. (Opcional) Gera um arquivo .docx de saída somente se o usuário solicitar via --out-docx.
 -------------------------------------------------------------------------
 """
 
 import sys
 import os
 import json
+import shutil
+import platform
 import subprocess
 import argparse
 from pathlib import Path
@@ -29,29 +32,74 @@ import json_to_xml
 import embed_xml_cv
 import clean_docx_completely
 
-CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+CHROME_PATH_MAC = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 TEMPLATES_DIR = Path("templates")
 OUTPUT_DIR = Path("output")
 
-def convert_docx_to_pdf_word(docx_path: str, pdf_path: str) -> bool:
-    """Converte um arquivo .docx para PDF com 100% de fidelidade usando o MS Word no macOS."""
+def convert_docx_to_pdf_cross_platform(docx_path: str, pdf_path: str) -> bool:
+    """Converte um arquivo .docx para PDF de forma multiplataforma (macOS, Windows, Linux)."""
     abs_docx = os.path.abspath(docx_path)
     abs_pdf = os.path.abspath(pdf_path)
-    
-    applescript = f'''
-    tell application "Microsoft Word"
-        open (POSIX file "{abs_docx}")
-        save as active document file name "{abs_pdf}" file format format PDF
-        close active document saving no
-    end tell
-    '''
-    try:
-        subprocess.run(["osascript", "-e", applescript], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(f"[✓] DOCX convertido para PDF via MS Word com 100% de precisão: {pdf_path}")
-        return True
-    except Exception as e:
-        print(f"[*] Aviso ao converter via MS Word: {e}")
-        return False
+    system = platform.system()
+
+    # 1. No Windows (se MS Word estiver instalado)
+    if system == "Windows":
+        try:
+            import win32com.client
+            word = win32com.client.Dispatch("Word.Application")
+            doc = word.Documents.Open(abs_docx)
+            doc.SaveAs(abs_pdf, FileFormat=17) # 17 = wdFormatPDF
+            doc.Close()
+            word.Quit()
+            print(f"[✓] DOCX convertido para PDF via MS Word (Windows): {pdf_path}")
+            return True
+        except Exception as e_win:
+            print(f"[*] Tentativa de conversão via MS Word no Windows falhou: {e_win}")
+
+    # 2. No macOS (via AppleScript MS Word)
+    if system == "Darwin":
+        applescript = f'''
+        tell application "Microsoft Word"
+            open (POSIX file "{abs_docx}")
+            save as active document file name "{abs_pdf}" file format format PDF
+            close active document saving no
+        end tell
+        '''
+        try:
+            subprocess.run(["osascript", "-e", applescript], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            print(f"[✓] DOCX convertido para PDF via MS Word (macOS): {pdf_path}")
+            return True
+        except Exception:
+            pass
+
+    # 3. No Linux, Windows ou macOS (via LibreOffice / soffice se instalado)
+    soffice_bin = shutil.which("soffice") or shutil.which("libreoffice")
+    if soffice_bin:
+        try:
+            out_dir = os.path.dirname(abs_pdf)
+            cmd = [soffice_bin, "--headless", "--convert-to", "pdf", abs_docx, "--outdir", out_dir]
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            converted_default = os.path.join(out_dir, Path(abs_docx).stem + ".pdf")
+            if os.path.exists(converted_default) and converted_default != abs_pdf:
+                os.replace(converted_default, abs_pdf)
+            print(f"[✓] DOCX convertido para PDF via LibreOffice ({system}): {pdf_path}")
+            return True
+        except Exception as e_lo:
+            print(f"[*] Conversão via LibreOffice falhou: {e_lo}")
+
+    # 4. Fallback via textutil / Playwright se disponível
+    if shutil.which("textutil"):
+        temp_html = os.path.join(os.path.dirname(abs_pdf), "temp_docx_conv.html")
+        try:
+            subprocess.run(["textutil", "-convert", "html", abs_docx, "-output", temp_html], check=True)
+            html_to_pdf(temp_html, abs_pdf)
+            if os.path.exists(temp_html):
+                os.remove(temp_html)
+            return True
+        except Exception:
+            pass
+
+    return False
 
 def render_html_template(json_data: dict, template_name: str) -> str:
     """Renderiza os dados JSON em um arquivo HTML usando Jinja2."""
@@ -89,12 +137,12 @@ def render_html_template(json_data: dict, template_name: str) -> str:
     return str(temp_html_path)
 
 def html_to_pdf(html_path: str, temp_pdf_path: str) -> str:
-    """Converte arquivo HTML para PDF via Playwright (Chromium) ou fallback."""
+    """Converte arquivo HTML para PDF de forma multiplataforma via Playwright (Chromium) ou Chrome."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     abs_html_path = os.path.abspath(html_path)
     abs_html_url = f"file://{abs_html_path}"
 
-    # 1. Tenta Playwright
+    # 1. Tenta Playwright (Multiplataforma: Windows, Linux, Mac)
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -113,13 +161,16 @@ def html_to_pdf(html_path: str, temp_pdf_path: str) -> str:
     except Exception as e_pw:
         print(f"[*] Playwright não disponível/falhou: {e_pw}. Tentando Google Chrome...")
 
-    # 2. Fallback Google Chrome Headless
-    if os.path.exists(CHROME_PATH):
+    # 2. Fallback Google Chrome Headless (Multiplataforma)
+    chrome_bin = shutil.which("google-chrome") or shutil.which("chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+    if not chrome_bin and os.path.exists(CHROME_PATH_MAC):
+        chrome_bin = CHROME_PATH_MAC
+
+    if chrome_bin:
         cmd = [
-            CHROME_PATH,
+            chrome_bin,
             "--headless=new",
             "--no-sandbox",
-            "--user-data-dir=/tmp/chrome_pdf_user_dir",
             "--disable-gpu",
             "--no-pdf-header-footer",
             f"--print-to-pdf={temp_pdf_path}",
@@ -138,8 +189,8 @@ def html_to_pdf(html_path: str, temp_pdf_path: str) -> str:
     generate_sample_pdf.create_simple_pdf(temp_pdf_path)
     return temp_pdf_path
 
-def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", docx_template: str = None, output_pdf: str = None):
-    """Executa o fluxo completo: JSON / DOCX -> PDF Otimizado com HR-XML ATS."""
+def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", docx_template: str = None, output_pdf: str = None, out_docx: str = None):
+    """Executa o fluxo completo de forma multiplataforma: JSON / DOCX -> PDF Otimizado com HR-XML ATS."""
     if not os.path.exists(json_path):
         print(f"[❌] Arquivo JSON de entrada não encontrado: {json_path}")
         sys.exit(1)
@@ -159,14 +210,21 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx como modelo, limpa os rodapés e converte via MS Word
+    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés e converte multiplataforma para PDF
     if docx_template and os.path.exists(docx_template):
-        print(f"[*] Utilizando arquivo .docx nativo como modelo: {docx_template}")
-        clean_docx = str(OUTPUT_DIR / "temp_clean_template.docx")
+        print(f"[*] Utilizando modelo .docx de entrada: {docx_template}")
+        clean_docx = str(OUTPUT_DIR / f"{consultant_name}_clean.docx") if out_docx else str(OUTPUT_DIR / "temp_clean_template.docx")
         clean_docx_completely.clean_docx_footers(docx_template, clean_docx)
-        success = convert_docx_to_pdf_word(clean_docx, temp_pdf)
-        if os.path.exists(clean_docx):
+        
+        # Converte o .docx para PDF de forma multiplataforma (macOS, Windows, Linux)
+        success = convert_docx_to_pdf_cross_platform(clean_docx, temp_pdf)
+        
+        # Remove o docx temporário se o usuário não solicitou explicitamente
+        if not out_docx and os.path.exists(clean_docx):
             os.remove(clean_docx)
+        elif out_docx and os.path.exists(clean_docx):
+            print(f"[✓] Arquivo .docx de saída gerado a pedido do usuário em: {clean_docx}")
+
         if not success:
             rendered_html = render_html_template(json_data, template_name)
             html_to_pdf(rendered_html, temp_pdf)
@@ -179,7 +237,7 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
         if os.path.exists(rendered_html):
             os.remove(rendered_html)
 
-    # 4. Injetar XML e Metadados ATS no PDF final
+    # 4. Injetar XML e Metadados ATS no PDF final de saída
     embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
 
     # Limpeza de arquivos temporários
@@ -187,10 +245,12 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
         os.remove(temp_pdf)
 
     print(f"\n=======================================================")
-    print(f" 🎉 PROCESSO CONCLUÍDO COM SUCESSO!")
-    print(f" PDF Final Otimizado para ATS: {output_pdf}")
-    print(f" Base de dados JSON: {json_path}")
-    print(f" Template utilizado: {docx_template or template_name}")
+    print(f" 🎉 PROCESSO CONCLUÍDO COM SUCESSO! ({platform.system()})")
+    print(f" 📄 PDF de Saída (Final): {output_pdf}")
+    print(f" 📊 Base de dados JSON: {json_path}")
+    print(f" 🎨 Modelo utilizado: {docx_template or template_name}")
+    if out_docx:
+        print(f" 📝 DOCX de Saída Adicional: {out_docx}")
     print(f"=======================================================\n")
 
 def list_templates():
@@ -202,11 +262,12 @@ def list_templates():
     print("")
 
 def main():
-    parser = argparse.ArgumentParser(description="Gerador de CVs PDF a partir de JSON com múltiplos templates gráficos e ATS XML.")
+    parser = argparse.ArgumentParser(description="Gerador de CVs PDF a partir de JSON Multiplataforma (Windows, Linux, Mac) com ATS XML.")
     parser.add_argument("--json", default="sample_cv.json", help="Caminho do arquivo JSON contendo a base do currículo (padrão: sample_cv.json)")
     parser.add_argument("--template", default="sprintcv_docx", help="Nome do template gráfico HTML (sprintcv_docx, modern, classic, tech_dark) (padrão: sprintcv_docx)")
-    parser.add_argument("--docx", default=None, help="Caminho opcional para um arquivo template .docx nativo (ex: 'Samples/Sprint CV Elton Machado 20260729 085709.docx')")
-    parser.add_argument("--out", default=None, help="Caminho do PDF de saída (padrão: output/<nome>_<template>_ats.pdf)")
+    parser.add_argument("--docx", default=None, help="Caminho opcional para um arquivo modelo .docx de ENTRADA (ex: 'Samples/Sprint CV Elton Machado 20260729 085709.docx')")
+    parser.add_argument("--out", default=None, help="Caminho do PDF de SAÍDA (padrão: output/<nome>_<template>_ats.pdf)")
+    parser.add_argument("--out-docx", action="store_true", help="Gera também um arquivo .docx de saída sem logos de rodapé além do PDF de saída.")
     parser.add_argument("--list-templates", action="store_true", help="Lista os templates gráficos disponíveis.")
 
     args = parser.parse_args()
@@ -215,7 +276,7 @@ def main():
         list_templates()
         return
 
-    build_cv_from_json(args.json, args.template, args.docx, args.out)
+    build_cv_from_json(args.json, args.template, args.docx, args.out, args.out_docx)
 
 if __name__ == "__main__":
     main()
