@@ -1,72 +1,48 @@
-# Gerador de CVs PDF Multiplataforma (Windows, Linux, Mac) 🚀
+# XML to PDF CV Builder
 
-Sistema completo em Python para gerar Currículos/CVs em PDF estilizados a partir de uma base única de dados em JSON, suportando **modelos de entrada em Word (.docx)**, **templates gráficos em HTML/CSS** e **incorporação automática de metadados ATS XML**.
-
-> 🌐 **MULTIPLATAFORMA**: Funciona nativamente em **macOS**, **Windows** e **Linux**.
-> 📌 **A SAÍDA É SEMPRE UM ARQUIVO PDF (`.pdf`)** com metadados HR-XML incorporados para robôs ATS e visual perfeito para recrutadores humanos.
+Un motor genérico em Python para conversão de currículos **JSON → DOCX (Design Nativo) → PDF (Com Metadados HR-XML ATS)**.
 
 ---
 
-## 💡 Como Funciona?
+## 🎯 Principais Recursos
 
-1. **Base Única em JSON (`.json`)**: Todos os dados do candidato (dados pessoais, contatos, resumo, conquistas, experiências de trabalho, habilidades, idiomas, formação e certificações) ficam armazenados em um único arquivo JSON.
-2. **Modelo de Entrada em Word NATIVO (`--docx`)**: Você pode passar o seu arquivo `.docx` original (da pasta `Samples/`) como modelo de entrada. O sistema converte o arquivo em PDF de forma **multiplataforma** (MS Word no Windows/macOS, LibreOffice no Linux/Windows/Mac) e **remove automaticamente qualquer imagem/logo de rodapé do SprintCV**.
-3. **Templates Gráficos HTML/CSS (`--template`)**: O mesmo arquivo JSON pode ser renderizado em múltiplos layouts gráficos HTML (`sprintcv_docx`, `sprintcv`, `modern`, `classic`, `tech_dark`).
-4. **Conversão Automática para HR-XML**: O sistema converte o JSON automaticamente para o padrão internacional HR-XML 3.0.
-5. **Otimização para ATS (Applicant Tracking Systems)**: O XML e os metadados XMP/Info são injetados diretamente dentro do PDF gerado (de forma limpa e invisível para o leitor humano).
-6. **Saída em PDF (`output/`)**: Todos os arquivos gerados são salvos por padrão como `.pdf` na pasta `output/` (ignorada no Git para proteger seus dados pessoais).
+1. **Design 100% Nativo a partir de Modelos DOCX**:
+   - Preserva layout, colunas, tabelas de 2 colunas, bordas, marcas d'água e molduras de avatar de qualquer arquivo `.docx` em `samples/`.
+2. **Conteúdo 100% Oriundo do JSON**:
+   - Povoa nome, contatos, resumo, experiências, habilidades, educação, certificações e idiomas exclusivamente a partir de `sample_cv.json`.
+3. **Purga Total de Dados Não Relacionados**:
+   - Remove automaticamente empregos antigos, habilidades não mapeadas (ex: `NSX`), localizações e idiomas que não pertençam ao JSON do candidato.
+4. **Geração PDF-First (Headless via LibreOffice)**:
+   - Converte diretamente para PDF em ~0.5s sem abrir interface gráfica do Word (`soffice --headless`).
+   - Apaga arquivos `.docx` temporários por padrão (a menos que a flag `--out-docx` seja fornecida).
+5. **Conformidade HR-XML v3.0 ATS**:
+   - Incorpora `resume.xml` com metadados estruturados para robôs de recrutamento (ATS).
 
 ---
 
-## 🚀 Guia de Uso Rápido
+## 🚀 Como Usar
 
-### 1. Gerar PDF de Saída a partir de um Modelo `.docx` de Entrada
-
-Para utilizar o seu arquivo `.docx` original (na pasta `Samples/`) como modelo de entrada para gerar um **PDF de saída**:
-
+### Geração Padrão (Saída Exclusiva em PDF):
 ```bash
-python3 cv_builder.py --json sample_cv.json --docx "Samples/modern.docx"
+python3 cv_builder.py --json sample_cv.json --docx expert
 ```
 
-> **Resultado de Saída**: O arquivo final gerado em `output/` será um arquivo PDF (`.pdf`), limpo e com metadados ATS HR-XML incorporados!
-
----
-
-### 2. Gerar PDF de Saída a partir de Templates HTML
-
+### Mantendo também o arquivo DOCX populado:
 ```bash
-# Template SprintCV HTML
-python3 cv_builder.py --json sample_cv.json --template sprintcv_docx
+python3 cv_builder.py --json sample_cv.json --docx expert --out-docx
+```
 
-# Template Modern (2 Colunas)
-python3 cv_builder.py --json sample_cv.json --template modern
-
-# Template Classic (Executivo)
-python3 cv_builder.py --json sample_cv.json --template classic
-
-# Template Tech Dark (DevOps)
-python3 cv_builder.py --json sample_cv.json --template tech_dark
+### Lista de Modelos Disponíveis:
+```bash
+python3 cv_builder.py --list-samples
 ```
 
 ---
 
-## 🛠️ Suporte Multiplataforma (Windows, Linux, macOS)
+## 🧪 Suíte de Testes Unificada E2E
 
-| Sistema Operacional | Método de Conversão DOCX -> PDF | Renderizador HTML -> PDF |
-| :--- | :--- | :--- |
-| **Windows** | MS Word (win32com) ou LibreOffice | Playwright (Chromium) / Chrome |
-| **Linux** | LibreOffice (`soffice`) / unoconv | Playwright (Chromium) / Chrome |
-| **macOS** | MS Word (`osascript`) / LibreOffice | Playwright (Chromium) / Chrome |
+Para executar a validação completa de geração de PDFs, expurgo de dados antigos e conformidade OpenXML:
 
----
-
-## 📁 Estrutura do Projeto
-
-- **[cv_builder.py](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/cv_builder.py)**: Script principal multiplataforma para gerar os PDFs de saída.
-- **[clean_docx_completely.py](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/clean_docx_completely.py)**: Utilitário que limpa rodapés e logos de arquivos `.docx`.
-- **[json_to_xml.py](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/json_to_xml.py)**: Converte dados JSON em arquivo HR-XML 3.0.
-- **[embed_xml_cv.py](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/embed_xml_cv.py)**: Injeta o XML e metadados ATS no PDF.
-- **[CV_WRITING_TIPS.md](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/CV_WRITING_TIPS.md)**: Guia de boas práticas de escrita de currículo.
-- **[templates/](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/templates)**: Pasta de templates HTML/CSS (`sprintcv_docx.html`, `sprintcv.html`, `modern.html`, `classic.html`, `tech_dark.html`).
-- **[Samples/](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/Samples)**: Pasta privada contendo seu arquivo `.docx` original (ignorada pelo Git).
-- **[output/](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/output)**: Pasta de destino dos PDFs gerados (ignorada pelo Git).
+```bash
+python3 tests/test_e2e_pipeline.py
+```

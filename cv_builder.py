@@ -122,6 +122,7 @@ def build_cv_from_json(json_path: str, docx_template: str = "samples/expert.docx
     print(f" 📊 Base de dados JSON: {json_path}")
     print(f" 🎨 Modelo .docx utilizado: {docx_template}")
     print(f"=======================================================\n")
+    return output_pdf
 
 def list_samples():
     """Lista os modelos .docx disponíveis na pasta samples/."""
