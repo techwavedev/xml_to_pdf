@@ -5,8 +5,10 @@ import html
 import json
 import xml.etree.ElementTree as ET
 
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ET.register_namespace('w', W_NS)
+
 def sanitize_xml_string(xml_str: str) -> str:
-    """Garante que qualquer & não escapado seja convertido para &amp; mantendo o XML válido."""
     return re.sub(r'&(?!(amp|lt|gt|quot|apos);)', '&amp;', xml_str)
 
 def format_tech_item(item):
@@ -16,17 +18,44 @@ def format_tech_item(item):
         return item.get("name") or item.get("technology") or item.get("title") or str(item)
     return str(item)
 
-def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
-    """
-    Popula QUALQUER template .docx usando 100% dos dados do feed JSON:
-    1. Preserva o layout visual, tabelas, cores, fontes e fundo do template .docx.
-    2. Substitui o cabeçalho, resumo, contatos, habilidades, experiências e educação exclusivamente a partir do JSON.
-    3. Substitui a foto do candidato e remove logos do SprintCV.
-    """
-    if not os.path.exists(docx_input_path):
-        print(f"[❌] DOCX template não encontrado: {docx_input_path}")
-        return False
+def create_w_p(text: str, is_heading: bool = False, is_subheading: bool = False, is_bullet: bool = False) -> ET.Element:
+    p = ET.Element(f"{{{W_NS}}}p")
+    pPr = ET.SubElement(p, f"{{{W_NS}}}pPr")
+    
+    if is_heading:
+        pStyle = ET.SubElement(pPr, f"{{{W_NS}}}pStyle")
+        pStyle.set(f"{{{W_NS}}}val", "Heading1")
+        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
+        spacing.set(f"{{{W_NS}}}before", "240")
+        spacing.set(f"{{{W_NS}}}after", "120")
+    elif is_subheading:
+        pStyle = ET.SubElement(pPr, f"{{{W_NS}}}pStyle")
+        pStyle.set(f"{{{W_NS}}}val", "Heading2")
+        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
+        spacing.set(f"{{{W_NS}}}before", "160")
+        spacing.set(f"{{{W_NS}}}after", "80")
+    elif is_bullet:
+        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
+        spacing.set(f"{{{W_NS}}}before", "40")
+        spacing.set(f"{{{W_NS}}}after", "40")
 
+    r = ET.SubElement(p, f"{{{W_NS}}}r")
+    rPr = ET.SubElement(r, f"{{{W_NS}}}rPr")
+    
+    if is_heading:
+        b = ET.SubElement(rPr, f"{{{W_NS}}}b")
+    elif is_subheading:
+        b = ET.SubElement(rPr, f"{{{W_NS}}}b")
+
+    t = ET.SubElement(r, f"{{{W_NS}}}t")
+    t.text = text
+    return p
+
+def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
+    """
+    Substitui 100% dos dados de contatos e purga qualquer campo de autorização/endereço antigo 
+    que NÃO exista no feed JSON.
+    """
     consultant = json_data.get("consultant", {})
     name = consultant.get("name", "")
     surname = consultant.get("surname", "")
@@ -38,27 +67,164 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
     country = consultant.get("country", "")
     location = f"{city}, {country}".strip(", ")
     linkedin = consultant.get("linkedin", "")
+    work_auth = consultant.get("work_authorization") or (f"{consultant.get('nationality')} Citizen" if consultant.get('nationality') else "")
+
+    # 1. Substituir E-mail
+    if email:
+        xml_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', html.escape(email, quote=False), xml_str)
+
+    # 2. Substituir LinkedIn (com ou sem http/https)
+    if linkedin:
+        xml_str = re.sub(r'(?i)(?:https?://)?(?:[a-z0-9-]+\.)*linkedin\.com/[^\s<"\']+', html.escape(linkedin, quote=False), xml_str)
+
+    # 3. Substituir Telefone
+    if phone:
+        xml_str = re.sub(r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}', html.escape(phone, quote=False), xml_str)
+
+    # 4. Substituir Localização e Cidades Antigas
+    if location:
+        xml_str = re.sub(r'Aveiro\s*,\s*Portugal', html.escape(location, quote=False), xml_str)
+        xml_str = re.sub(r'Itapema,\s*SC', html.escape(location, quote=False), xml_str)
+        if city:
+            xml_str = re.sub(r'(?i)\baveiro\b', html.escape(city, quote=False), xml_str)
+            xml_str = re.sub(r'(?i)\bitapema\b', html.escape(city, quote=False), xml_str)
+        if country:
+            xml_str = re.sub(r'(?i)\bportugal\b', html.escape(country, quote=False), xml_str)
+
+    # 5. Substituir Nomes Divididos
+    if fullname:
+        xml_str = re.sub(r'(?i)elton\s+machado', html.escape(fullname, quote=False), xml_str)
+        if name:
+            xml_str = re.sub(r'(?i)\belton\b', html.escape(name, quote=False), xml_str)
+        if surname:
+            xml_str = re.sub(r'(?i)\bmachado\b', html.escape(surname, quote=False), xml_str)
+
+    # 6. Purga ou Substitui Autorização de Trabalho / Cidadania Antiga (Work Authorization)
+    if work_auth:
+        xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', html.escape(work_auth, quote=False), xml_str)
+        xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', html.escape(work_auth, quote=False), xml_str)
+    else:
+        # Se não estiver no JSON, apaga o texto de autorização de trabalho do modelo antigo
+        xml_str = re.sub(r'(?i)Work\s+Authorization:[^\n<"\']*', '', xml_str)
+        xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', '', xml_str)
+        xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', '', xml_str)
+
+    return xml_str
+
+def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
+    consultant = json_data.get("consultant", {})
+    fullname = f"{consultant.get('name', '')} {consultant.get('surname', '')}".strip()
+    title = json_data.get("present_job_title", "")
     summary = json_data.get("about") or json_data.get("cv_summary") or ""
     
-    top_techs_raw = json_data.get("top_technologies") or []
-    top_techs = [format_tech_item(t) for t in top_techs_raw]
-    techs_str = ", ".join(top_techs)
-
     exps = json_data.get("work_experiences", [])
     educations = json_data.get("educations", [])
+    certifications = json_data.get("certifications", [])
     languages = json_data.get("languages", [])
+    top_techs_raw = json_data.get("top_technologies") or []
+    top_techs = [format_tech_item(t) for t in top_techs_raw]
 
-    # Textos escapados para XML
-    fullname_xml = html.escape(fullname, quote=False)
-    title_xml = html.escape(title, quote=False)
-    email_xml = html.escape(email, quote=False)
-    phone_xml = html.escape(phone, quote=False)
-    location_xml = html.escape(location, quote=False)
-    linkedin_xml = html.escape(linkedin, quote=False)
-    summary_xml = html.escape(summary, quote=False)
-    techs_xml = html.escape(techs_str, quote=False)
+    try:
+        doc_xml = replace_dynamic_contact_regex(doc_xml, json_data)
+        root = ET.fromstring(doc_xml)
 
-    # Preparar bytes da imagem transparente e foto do candidato
+        main_tc = None
+        for tc in root.iter(f"{{{W_NS}}}tc"):
+            text = ''.join([t.text for t in tc.iter(f"{{{W_NS}}}t") if t.text]).strip()
+            if any(k in text.lower() for k in ["work experience", "professional experience", "summary"]):
+                main_tc = tc
+                break
+
+        if main_tc is None:
+            main_tc = root.find(f"{{{W_NS}}}body")
+
+        if main_tc is not None:
+            children = list(main_tc)
+            summary_p = None
+            work_p_idx = None
+
+            for idx, elem in enumerate(children):
+                if elem.tag == f"{{{W_NS}}}p":
+                    t_str = ''.join([t.text for t in elem.iter(f"{{{W_NS}}}t") if t.text]).strip()
+                    if summary_p is None and any(k == t_str.lower() for k in ["summary", "professional summary", "resumo"]):
+                        summary_p = elem
+                    elif work_p_idx is None and any(k in t_str.lower() for k in ["work experience", "professional experience", "work history"]):
+                        work_p_idx = idx
+
+            if work_p_idx is not None:
+                for elem in children[work_p_idx+1:]:
+                    if elem.tag == f"{{{W_NS}}}p":
+                        main_tc.remove(elem)
+
+                insert_pos = work_p_idx + 1
+
+                if summary and summary_p is None:
+                    main_tc.insert(insert_pos, create_w_p("SUMMARY", is_heading=True))
+                    insert_pos += 1
+                    main_tc.insert(insert_pos, create_w_p(summary))
+                    insert_pos += 1
+
+                if exps:
+                    for exp in exps:
+                        exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
+                        main_tc.insert(insert_pos, create_w_p(exp_header, is_subheading=True))
+                        insert_pos += 1
+
+                        if exp.get("description"):
+                            main_tc.insert(insert_pos, create_w_p(exp["description"]))
+                            insert_pos += 1
+
+                        for task in exp.get("responsibilities", []):
+                            main_tc.insert(insert_pos, create_w_p(f"• {task}", is_bullet=True))
+                            insert_pos += 1
+
+                        if exp.get("technologies"):
+                            main_tc.insert(insert_pos, create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
+                            insert_pos += 1
+
+                if top_techs:
+                    main_tc.insert(insert_pos, create_w_p("TECHNICAL SKILLS", is_heading=True))
+                    insert_pos += 1
+                    main_tc.insert(insert_pos, create_w_p(", ".join(top_techs)))
+                    insert_pos += 1
+
+                if educations:
+                    main_tc.insert(insert_pos, create_w_p("EDUCATION", is_heading=True))
+                    insert_pos += 1
+                    for edu in educations:
+                        degree = edu.get("degree") or edu.get("course") or ""
+                        school = edu.get("institution") or edu.get("school") or ""
+                        year = edu.get("year") or edu.get("period") or ""
+                        main_tc.insert(insert_pos, create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
+                        insert_pos += 1
+
+                if certifications:
+                    main_tc.insert(insert_pos, create_w_p("CERTIFICATIONS", is_heading=True))
+                    insert_pos += 1
+                    for cert in certifications:
+                        c_name = cert.get("title") or cert.get("name") or str(cert)
+                        main_tc.insert(insert_pos, create_w_p(f"• {c_name}", is_bullet=True))
+                        insert_pos += 1
+
+                if languages:
+                    main_tc.insert(insert_pos, create_w_p("LANGUAGES", is_heading=True))
+                    insert_pos += 1
+                    for lang in languages:
+                        l_name = lang.get("language") or lang.get("name") or str(lang)
+                        l_level = lang.get("proficiency") or lang.get("level") or ""
+                        main_tc.insert(insert_pos, create_w_p(f"• {l_name}: {l_level}", is_bullet=True))
+                        insert_pos += 1
+
+        return ET.tostring(root, encoding='utf-8').decode('utf-8')
+    except Exception as e:
+        print(f"[*] Erro na reconstrução do document.xml: {e}")
+        return doc_xml
+
+def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
+    if not os.path.exists(docx_input_path):
+        print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
+        return False
+
     transparent_path = "assets/transparent.png"
     transparent_bytes = b""
     if os.path.exists(transparent_path):
@@ -89,37 +255,14 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
                     else:
                         jout.writestr(item, data)
 
-                elif fname.startswith('word/document.xml') or fname.startswith('word/header') or fname.startswith('word/footer'):
+                elif fname == 'word/document.xml':
                     doc_str = data.decode('utf-8')
-
-                    # 1. Contatos e Cabeçalho do Candidato
-                    if email_xml:
-                        doc_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', email_xml, doc_str)
-                    if linkedin_xml:
-                        doc_str = re.sub(r'https?://[^\s<"]+linkedin[^\s<"]*', linkedin_xml, doc_str)
-                    if phone_xml:
-                        doc_str = re.sub(r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}', phone_xml, doc_str)
-                    if location_xml:
-                        doc_str = re.sub(r'Aveiro\s*,\s*Portugal', location_xml, doc_str)
-                        doc_str = re.sub(r'Itapema,\s*SC', location_xml, doc_str)
-
-                    # 2. Nome e Cargo
-                    if fullname_xml:
-                        doc_str = re.sub(r'(?i)elton\s+machado', fullname_xml, doc_str)
-                    if title_xml:
-                        doc_str = re.sub(r'(?i)Senior Platform Engineer.*?Architect', title_xml, doc_str)
-                        doc_str = re.sub(r'(?i)DevOps Engineer', title_xml, doc_str)
-
-                    # 3. Resumo Profissional (Summary)
-                    if summary_xml:
-                        doc_str = re.sub(r'(?i)Senior Platform Engineer and Cloud/AI Architect with 28\+ years.*?(?=\n|<)', summary_xml, doc_str)
-                        doc_str = re.sub(r'(?i)Over 29 years of experience in IT infrastructure.*?(?=\n|<)', summary_xml, doc_str)
-
-                    # 4. Habilidades Técnicas / Top Technologies
-                    if techs_xml:
-                        doc_str = re.sub(r'Active Directory, LDAP, VMware ESX, Windows Server, AWS, Terraform, Ansible, GitLab CI/CD, Jenkins, Prometheus, Grafana, ELK', techs_xml, doc_str)
-
-                    # Sanitização estrita do XML
+                    doc_str = safe_populate_document_xml(doc_str, json_data)
+                    doc_str = sanitize_xml_string(doc_str)
+                    jout.writestr(item, doc_str.encode('utf-8'))
+                elif fname.startswith('word/header') or fname.startswith('word/footer'):
+                    doc_str = data.decode('utf-8')
+                    doc_str = replace_dynamic_contact_regex(doc_str, json_data)
                     doc_str = sanitize_xml_string(doc_str)
                     jout.writestr(item, doc_str.encode('utf-8'))
                 else:
@@ -127,6 +270,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com sucesso em: {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com purga total de campos não mapeados: {docx_output_path}")
         return True
     return False
