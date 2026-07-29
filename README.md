@@ -55,13 +55,6 @@ Extrai o XML de volta do PDF (salva por padrão em `output/resume_extraido.xml`)
 ```bash
 python3 embed_xml_cv.py extract --pdf output/meu_curriculo_ats.pdf
 ```
-
----
-
-## 🔒 Controle de Versão (Git / .gitignore)
-
-A pasta `output/`, os arquivos de saída `.pdf`, `.xml` extraídos e templates pessoais estão ignorados no [.gitignore](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/.gitignore) para garantir que seus currículos gerados não sejam sincronizados acidentalmente no repositório.
-
 ---
 
 ## 📁 Estrutura dos Arquivos
