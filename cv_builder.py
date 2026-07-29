@@ -87,18 +87,6 @@ def convert_docx_to_pdf_cross_platform(docx_path: str, pdf_path: str) -> bool:
         except Exception as e_lo:
             print(f"[*] Conversão via LibreOffice falhou: {e_lo}")
 
-    # 4. Fallback via textutil / Playwright se disponível
-    if shutil.which("textutil"):
-        temp_html = os.path.join(os.path.dirname(abs_pdf), "temp_docx_conv.html")
-        try:
-            subprocess.run(["textutil", "-convert", "html", abs_docx, "-output", temp_html], check=True)
-            html_to_pdf(temp_html, abs_pdf)
-            if os.path.exists(temp_html):
-                os.remove(temp_html)
-            return True
-        except Exception:
-            pass
-
     return False
 
 def render_html_template(json_data: dict, template_name: str) -> str:
