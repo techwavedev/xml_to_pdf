@@ -333,6 +333,19 @@
         <div class="left-col">
             <div class="section-header">TOP TECHNOLOGIES*</div>
             
+            {% if top_technologies %}
+            {% for tech in top_technologies %}
+            <div class="tech-row">
+                <span class="tech-name">{{ tech.name if tech.name is defined else tech }}</span>
+                <div class="rating-dots">
+                    {% set rating = tech.rating if (tech.rating is defined and tech.rating) else 5 %}
+                    {% for i in range(rating) %}
+                    <span class="dot-blue"></span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
             <div class="tech-row"><span class="tech-name">AWS</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
             <div class="tech-row"><span class="tech-name">SRE</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
             <div class="tech-row"><span class="tech-name">Kubernetes</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
@@ -343,6 +356,7 @@
             <div class="tech-row"><span class="tech-name">Design solutions</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
             <div class="tech-row"><span class="tech-name">Prometheus</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
             <div class="tech-row"><span class="tech-name">Karpenter</span><div class="rating-dots"><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span><span class="dot-blue"></span></div></div>
+            {% endif %}
 
             <div class="rating-footnote">
                 * Competence rating based on self-assessment<br>(scale from 1 to 5)
@@ -446,11 +460,17 @@
     <!-- INDUSTRY EXPERIENCE -->
     <div class="section-header" style="margin-top: 25px;">INDUSTRY EXPERIENCE</div>
     <div class="industry-badges">
+        {% if industry_experiences %}
+        {% for ind in industry_experiences %}
+        <div class="industry-badge">{{ ind }}</div>
+        {% endfor %}
+        {% else %}
         <div class="industry-badge">Information Technology and Services</div>
         <div class="industry-badge">European Institutions</div>
         <div class="industry-badge">Banking</div>
         <div class="industry-badge">Education Management</div>
         <div class="industry-badge">Marketing and Advertising</div>
+        {% endif %}
     </div>
 
 </body>

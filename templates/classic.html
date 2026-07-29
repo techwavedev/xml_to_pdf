@@ -90,11 +90,16 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="name">{{ consultant.name }} {{ consultant.surname }}</div>
-        <div class="subtitle">{{ present_job_title or "DevOps & Senior Cloud Solutions Architect" }}</div>
-        <div class="contact-bar">
-            {{ consultant.email }} | {{ consultant.phone }} | {{ consultant.city }}, {{ consultant.country }} | {{ consultant.linkedin }}
+    <div class="header" style="display: flex; align-items: center; justify-content: center; text-align: left;">
+        {% if photo_b64 %}
+        <img src="data:image/png;base64,{{ photo_b64 }}" alt="Candidate Photo" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #2b6cb0; object-fit: cover; margin-right: 25px; flex-shrink: 0;">
+        {% endif %}
+        <div>
+            <div class="name">{{ consultant.name }} {{ consultant.surname }}</div>
+            <div class="subtitle">{{ present_job_title or "DevOps & Senior Cloud Solutions Architect" }}</div>
+            <div class="contact-bar">
+                {{ consultant.email }} | {{ consultant.phone }} | {{ consultant.city }}, {{ consultant.country }} | {{ consultant.linkedin }}
+            </div>
         </div>
     </div>
 

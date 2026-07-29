@@ -87,7 +87,10 @@
 </head>
 <body>
     <div class="header">
-        <div>
+        {% if photo_b64 %}
+        <img src="data:image/png;base64,{{ photo_b64 }}" alt="Candidate Photo" style="width: 75px; height: 75px; border-radius: 50%; border: 2.5px solid #38bdf8; object-fit: cover; margin-right: 20px; flex-shrink: 0;">
+        {% endif %}
+        <div style="flex-grow: 1;">
             <div class="title-name">{{ consultant.name }} {{ consultant.surname }}</div>
             <div class="title-role">{{ present_job_title or "DevOps & Senior Cloud Engineer" }}</div>
         </div>

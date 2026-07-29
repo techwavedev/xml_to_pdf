@@ -101,17 +101,65 @@ def render_html_template(json_data: dict, template_name: str) -> str:
     with open(template_file, 'r', encoding='utf-8') as f:
         template_content = f.read()
 
-    # Carrega assets de imagem base64 (fundo, foto) se disponíveis
-    if os.path.exists("assets/b64_assets.json"):
-        try:
-            with open("assets/b64_assets.json", "r") as f_b64:
-                b64_data = json.load(f_b64)
-                if "bg_b64" not in json_data or not json_data["bg_b64"]:
-                    json_data["bg_b64"] = b64_data.get("bg", "")
-                if "photo_b64" not in json_data or not json_data["photo_b64"]:
-                    json_data["photo_b64"] = b64_data.get("photo", "")
-        except Exception:
-            pass
+import base64
+
+def ensure_b64_assets(json_data: dict) -> dict:
+    """Carrega e converte assets de imagem (foto.png e fundo) para base64 se não fornecidos."""
+    assets_dir = Path("assets")
+    
+    # 1. Carregar photo.png como photo_b64
+    if "photo_b64" not in json_data or not json_data["photo_b64"]:
+        photo_path = assets_dir / "photo.png"
+        if not photo_path.exists():
+            photo_path = assets_dir / "original_candidate_photo.jpeg"
+        if not photo_path.exists():
+            photo_path = assets_dir / "fake_large.jpeg"
+            
+        if photo_path.exists():
+            with open(photo_path, "rb") as f:
+                json_data["photo_b64"] = base64.b64encode(f.read()).decode('utf-8')
+                print(f"[✓] Foto do candidato embutida ({photo_path.name}) -> photo_b64")
+
+    # 2. Carregar imagem de fundo (constelação) como bg_b64
+    if "bg_b64" not in json_data or not json_data["bg_b64"]:
+        bg_path = assets_dir / "image7.jpeg"
+        if not bg_path.exists():
+            bg_path = assets_dir / "image6.png"
+        if not bg_path.exists():
+            bg_path = assets_dir / "image4.png"
+            
+        if bg_path.exists():
+            with open(bg_path, "rb") as f:
+                json_data["bg_b64"] = base64.b64encode(f.read()).decode('utf-8')
+                print(f"[✓] Fundo watermark embutido ({bg_path.name}) -> bg_b64")
+
+    # 3. Atualizar/Salvar assets/b64_assets.json
+    try:
+        b64_payload = {
+            "photo": json_data.get("photo_b64", ""),
+            "bg": json_data.get("bg_b64", "")
+        }
+        with open(assets_dir / "b64_assets.json", "w", encoding="utf-8") as f:
+            json.dump(b64_payload, f)
+    except Exception:
+        pass
+
+    return json_data
+
+def render_html_template(json_data: dict, template_name: str) -> str:
+    """Renderiza os dados JSON em um arquivo HTML usando Jinja2."""
+    template_file = TEMPLATES_DIR / f"{template_name}.html"
+    if not template_file.exists():
+        template_file = Path(template_name)
+        if not template_file.exists():
+            print(f"[❌] Template '{template_name}' não encontrado na pasta templates/ ou no caminho especificado.")
+            sys.exit(1)
+
+    with open(template_file, 'r', encoding='utf-8') as f:
+        template_content = f.read()
+
+    # Garante a codificação base64 de assets de imagem (foto e fundo)
+    json_data = ensure_b64_assets(json_data)
 
     jinja_template = Template(template_content)
     rendered_html = jinja_template.render(**json_data)
@@ -171,11 +219,54 @@ def html_to_pdf(html_path: str, temp_pdf_path: str) -> str:
         except Exception as e_chrome:
             print(f"[*] Aviso ao executar Chrome Headless: {e_chrome}")
 
-    # 3. Fallback Simples
-    print("[*] Utilizando gerador PDF de fallback...")
-    import generate_sample_pdf
-    generate_sample_pdf.create_simple_pdf(temp_pdf_path)
+    # 3. Fallback: Se nem Playwright nem Chrome estiverem disponíveis
+    print("[❌] Erro: Playwright ou Chrome Headless são necessários para renderizar o PDF gráfico.")
     return temp_pdf_path
+
+DOCX_TO_TEMPLATE_MAP = {
+    "expert": "modern",
+    "itexpert": "modern",
+    "modern": "modern",
+    "resume": "classic",
+    "itresume": "classic",
+    "classic": "classic",
+    "mlops": "tech_dark",
+    "dark": "tech_dark",
+    "tech_dark": "tech_dark",
+    "sprint": "sprintcv_docx",
+    "sprint_clean": "sprintcv_docx",
+    "sprintcv": "sprintcv_docx",
+}
+
+def find_docx_file(docx_arg: str) -> str:
+    """Encontra o arquivo .docx aceitando variação de maiúsculas/minúsculas ou nome parcial em samples/."""
+    if not docx_arg:
+        return None
+    if os.path.exists(docx_arg):
+        return docx_arg
+
+    p = Path(docx_arg)
+    search_dirs = [p.parent, Path("samples"), Path(".")]
+    target_stem = p.stem.lower()
+
+    for sdir in search_dirs:
+        if sdir.exists():
+            for candidate in sdir.glob("*.docx"):
+                c_stem = candidate.stem.lower()
+                if target_stem in c_stem or c_stem in target_stem:
+                    print(f"[🔍] Arquivo DOCX localizado: '{candidate}' (para '{docx_arg}')")
+                    return str(candidate)
+
+    return docx_arg
+
+def resolve_template_name(template_name: str, docx_template: str = None) -> str:
+    """Mapeia o arquivo .docx de entrada ou nome do template para o modelo HTML/CSS gráfico correspondente."""
+    if docx_template:
+        stem = Path(docx_template).stem.lower()
+        for key, target_tmpl in DOCX_TO_TEMPLATE_MAP.items():
+            if key in stem or stem in key:
+                return target_tmpl
+    return template_name or "sprintcv_docx"
 
 def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", docx_template: str = None, output_pdf: str = None, out_docx: str = None):
     """Executa o fluxo completo de forma multiplataforma: JSON / DOCX -> PDF Otimizado com HR-XML ATS."""
@@ -183,12 +274,32 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
         print(f"[❌] Arquivo JSON de entrada não encontrado: {json_path}")
         sys.exit(1)
 
+    # Localiza o arquivo .docx aceitando nomes parciais/minúsculas (ex: 'samples/expert.docx' -> 'samples/ITExpert.docx')
+    if docx_template:
+        resolved_docx = find_docx_file(docx_template)
+        if resolved_docx and os.path.exists(resolved_docx):
+            docx_template = resolved_docx
+
     with open(json_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
 
-    consultant_name = json_data.get("consultant", {}).get("name", "CV")
+    # Resolve o template gráfico com base no modelo DOCX ou parâmetro fornecido
+    effective_template = resolve_template_name(template_name, docx_template)
+
+    # Garante o carregamento de photo_b64 e bg_b64
+    json_data = ensure_b64_assets(json_data)
+
+    consultant = json_data.get("consultant", {})
+    c_name = f"{consultant.get('name', '')}_{consultant.get('surname', '')}".strip("_") or "CV"
+
+    # Nomeia o PDF final baseado no sample/template utilizado se output_pdf não for explicitado
     if not output_pdf:
-        output_pdf = str(OUTPUT_DIR / f"{consultant_name}_{template_name}_ats.pdf")
+        if docx_template:
+            sample_stem = Path(docx_template).stem
+            output_pdf = str(OUTPUT_DIR / f"{sample_stem}_{c_name}_ats.pdf")
+        else:
+            json_stem = Path(json_path).stem
+            output_pdf = str(OUTPUT_DIR / f"{json_stem}_{effective_template}_{c_name}_ats.pdf")
     else:
         output_pdf = embed_xml_cv.ensure_output_dir(output_pdf)
 
@@ -198,29 +309,48 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés e converte multiplataforma para PDF
+    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés, atualiza foto/dados e converte nativamente para PDF
     if docx_template and os.path.exists(docx_template):
-        print(f"[*] Utilizando modelo .docx de entrada: {docx_template}")
-        clean_docx = str(OUTPUT_DIR / f"{consultant_name}_clean.docx") if out_docx else str(OUTPUT_DIR / "temp_clean_template.docx")
-        clean_docx_completely.clean_docx_sprint(docx_template, clean_docx)
+        sample_stem = Path(docx_template).stem
+        print(f"\n[*] Utilizando modelo .docx de entrada como DESIGN BASE: {docx_template}")
         
-        # Converte o .docx para PDF de forma multiplataforma (macOS, Windows, Linux)
-        success = convert_docx_to_pdf_cross_platform(clean_docx, temp_pdf)
+        # Gera o DOCX populado com o layout e formatação originais do modelo
+        populated_docx = str(OUTPUT_DIR / f"{sample_stem}_{c_name}.docx")
+        clean_docx_completely.clean_docx_sprint(docx_template, populated_docx, photo_path="assets/photo.png", json_data=json_data)
+        print(f"[✓] Arquivo DOCX populado com a formatação original salvo em: {populated_docx}")
         
-        # Remove o docx temporário se o usuário não solicitou explicitamente
-        if not out_docx and os.path.exists(clean_docx):
-            os.remove(clean_docx)
-        elif out_docx and os.path.exists(clean_docx):
-            print(f"[✓] Arquivo .docx de saída gerado a pedido do usuário em: {clean_docx}")
-
-        if not success:
-            rendered_html = render_html_template(json_data, template_name)
+        # Converte o .docx populado para PDF com 100% de fidelidade ao layout do Word
+        success = convert_docx_to_pdf_cross_platform(populated_docx, temp_pdf)
+        
+        if success:
+            embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
+            if os.path.exists(temp_pdf):
+                os.remove(temp_pdf)
+            if not out_docx and os.path.exists(populated_docx):
+                os.remove(populated_docx)
+            print(f"\n=======================================================")
+            print(f" 🎉 PROCESSO CONCLUÍDO COM SUCESSO! ({platform.system()})")
+            print(f" 📄 PDF de Saída (Fidelidade Word 100%): {output_pdf}")
+            print(f" 📊 Base de dados JSON: {json_path}")
+            print(f" 🎨 Modelo .docx utilizado: {docx_template}")
+            print(f"=======================================================\n")
+            return
+        else:
+            print(f"\n[⚠️] O MS Word não está em execução ou o LibreOffice não foi encontrado no seu sistema.")
+            print(f"     📄 O arquivo .docx populado mantendo 100% da formatação e design original foi salvo em:")
+            print(f"        -> {populated_docx}")
+            print(f"     💡 Para converter seu modelo .docx diretamente para PDF no Mac:")
+            print(f"        1. Certifique-se de que o Microsoft Word está aberto, ou")
+            print(f"        2. Instale o LibreOffice via Terminal: brew install --cask libreoffice")
+            print(f"     [*] Renderizando versão visual alternativa via HTML/CSS...")
+            
+            rendered_html = render_html_template(json_data, effective_template)
             html_to_pdf(rendered_html, temp_pdf)
             if os.path.exists(rendered_html):
                 os.remove(rendered_html)
     else:
-        # 3. Renderizar HTML a partir do Template escolhido e converter para PDF
-        rendered_html = render_html_template(json_data, template_name)
+        # 3. Renderizar HTML a partir do Template escolhido se não for fornecido arquivo .docx
+        rendered_html = render_html_template(json_data, effective_template)
         html_to_pdf(rendered_html, temp_pdf)
         if os.path.exists(rendered_html):
             os.remove(rendered_html)

@@ -51,13 +51,32 @@
   "cv_summary": "- Over 10 years of experience in cloud infrastructure and enterprise DevOps engineering.\n- Extensive expertise in AWS and GCP cloud platforms, Terraform IaC, and Kubernetes orchestration.\n- Strong background in building CI/CD pipelines using GitHub Actions, GitLab CI, and Jenkins.\n- Skilled in monitoring and observability stacks (Prometheus, Grafana, ELK).",
   "technical_skills": "DevOps, Cloud Infrastructure, AWS, GCP, Azure, Terraform, Ansible, Docker, Kubernetes, Helm, GitLab CI, GitHub Actions, Jenkins, Prometheus, Grafana, Python, Bash, Go, PostgreSQL, Redis, Linux Administration.",
   "relevant_accomplishments": "• Architected high-availability cloud infrastructure on AWS reducing downtime by 99.99%.\n• Automated multi-region Kubernetes deployments cutting deployment times from hours to minutes.\n• Implemented FinOps cloud cost optimization strategies reducing annual infrastructure spend by 30%.",
+  "top_technologies": [
+    { "name": "AWS Cloud Infrastructure", "rating": 5 },
+    { "name": "Kubernetes Orchestration", "rating": 5 },
+    { "name": "Terraform (IaC)", "rating": 5 },
+    { "name": "Linux Systems Administration", "rating": 5 },
+    { "name": "Site Reliability Engineering (SRE)", "rating": 5 },
+    { "name": "ELK Stack (Elasticsearch, Logstash, Kibana)", "rating": 5 },
+    { "name": "Docker & Containerization", "rating": 5 },
+    { "name": "Prometheus & Grafana Observability", "rating": 4 },
+    { "name": "CI/CD (GitLab CI, GitHub Actions, Jenkins)", "rating": 4 },
+    { "name": "TCP/IP Security & Firewall Configuration", "rating": 4 }
+  ],
+  "industry_experiences": [
+    "Information Technology & Cloud Infrastructure",
+    "Banking & Financial Systems",
+    "European Institutions & Public Sector",
+    "Telecommunications & Media",
+    "Education & E-Learning Platforms"
+  ],
   "work_experiences": [
     {
       "title": "Lead DevOps & Cloud Engineer",
       "company": "Cloud Scale Solutions Inc.",
       "period": "01/2022 - Present",
       "location": "San Francisco, USA",
-      "description": "Led the cloud architecture and automation efforts for enterprise multi-cloud platforms processing over 20M requests daily.",
+      "description": "Led cloud architecture and automation efforts for enterprise multi-cloud platforms processing over 20M requests daily.",
       "responsibilities": [
         "Architected reusable Infrastructure as Code modules using Terraform and Ansible for AWS EKS deployment.",
         "Constructed automated CI/CD pipelines in GitLab CI and GitHub Actions, cutting release deployment cycle times by 65%.",
@@ -81,7 +100,7 @@
     {
       "title": "Systems Engineer & DevOps Specialist",
       "company": "Enterprise Tech Labs",
-      "period": "03/2014 - 05/2018",
+      "period": "03/2015 - 05/2018",
       "location": "Austin, USA",
       "description": "Provided 3rd-line infrastructure support, virtualization management, and deployment automation.",
       "responsibilities": [
@@ -89,6 +108,30 @@
         "Built automated log aggregation and monitoring dashboards using ELK stack and Nagios."
       ],
       "technologies": ["Linux", "VMware ESXi", "Docker", "ELK Stack", "Nagios", "Python", "MySQL"]
+    },
+    {
+      "title": "Cloud & Linux Systems Administrator",
+      "company": "DataSphere Media Network",
+      "period": "06/2012 - 02/2015",
+      "location": "Austin, USA",
+      "description": "Maintained high-traffic streaming media servers, Linux server clusters, and automated system provisioning routines.",
+      "responsibilities": [
+        "Configured Nginx web servers and HAProxy load balancers handling peak traffic spikes of 50K concurrent streams.",
+        "Automated shell scripting and scheduled backups for MySQL database clusters across hybrid cloud environments."
+      ],
+      "technologies": ["Linux CentOS", "Nginx", "HAProxy", "Bash", "MySQL", "Nagios", "Apache"]
+    },
+    {
+      "title": "Junior Systems & Software Developer",
+      "company": "Nexus Software Labs",
+      "period": "07/2010 - 05/2012",
+      "location": "San Jose, USA",
+      "description": "Developed backend internal utilities, automated build scripts, and assisted senior administrators with infrastructure tasks.",
+      "responsibilities": [
+        "Wrote Python and shell utilities to streamline software deployment and automated regression tests.",
+        "Monitored server health metrics and provided 2nd-level technical escalation support for enterprise clients."
+      ],
+      "technologies": ["Python", "Bash", "Linux Ubuntu", "Git", "MySQL", "Shell Scripting"]
     }
   ],
   "social_skills": "Strong leadership, communication skills, collaborative mindset, experience working with international cross-functional teams.",
@@ -108,8 +151,8 @@
       "degree_short": "BSc",
       "course_name": "Degree in Computer Science",
       "course_institution": "University of California",
-      "course_start_date_year": 2008,
-      "course_end_date_year": 2012,
+      "course_start_date_year": 2006,
+      "course_end_date_year": 2010,
       "course_description": "Computer Science degree focusing on software engineering, distributed systems, and network protocols."
     }
   ],
@@ -125,9 +168,16 @@
   "other_languages": [
     {
       "name": "Spanish",
+      "written_label": "C1",
+      "spoken_label": "C1",
+      "understanding_label": "C1",
+      "written_name": "Fluent"
+    },
+    {
+      "name": "French",
       "written_label": "B2",
       "spoken_label": "B2",
-      "understanding_label": "C1",
+      "understanding_label": "B2",
       "written_name": "Professional working"
     }
   ],

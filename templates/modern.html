@@ -172,7 +172,11 @@
     <div class="cv-container">
         <!-- Sidebar -->
         <div class="sidebar">
+            {% if photo_b64 %}
+            <img class="avatar" src="data:image/png;base64,{{ photo_b64 }}" alt="Candidate Photo" style="object-fit: cover;">
+            {% else %}
             <div class="avatar">{{ consultant.initials or consultant.name[:1] }}</div>
+            {% endif %}
             <div class="candidate-name">{{ consultant.name }} {{ consultant.surname }}</div>
             <div class="candidate-title">{{ present_job_title or "DevOps & Cloud Specialist" }}</div>
 
