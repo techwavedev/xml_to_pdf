@@ -42,15 +42,26 @@ DEFAULT_OUTPUT_DIR = "output"
 def ensure_output_dir(path_str: str) -> str:
     """Garante que o caminho de saída esteja dentro da pasta output/ e que o diretório exista."""
     path = Path(path_str)
-    # Se o caminho for apenas um nome de arquivo ou não estiver explicitamente em output/, direciona para output/
     if not path.is_absolute() and len(path.parts) == 1:
         path = Path(DEFAULT_OUTPUT_DIR) / path
     
-    # Cria o diretório pai caso não exista
     if path.parent:
         os.makedirs(path.parent, exist_ok=True)
         
     return str(path)
+
+def pdf_escape_str(s: str) -> str:
+    """Escapa parênteses e formata caracteres não-ASCII para compatibilidade com strings PDF."""
+    if not s:
+        return ""
+    res = s.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+    out = []
+    for char in res:
+        if ord(char) < 128:
+            out.append(char)
+        else:
+            out.append("".join(f"\\{b:03o}" for b in char.encode('utf-8')))
+    return "".join(out)
 
 def validate_xml(xml_path: str) -> str:
     """Valida a sintaxe do arquivo XML e retorna seu conteúdo como texto."""
@@ -204,24 +215,29 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
     info_dict_id = max_obj_id + 5
     catalog_id = max_obj_id + 6
 
+    # 1. Objeto Stream do Arquivo Anexo
     ef_stream_obj = (
         f"{ef_stream_id} 0 obj\n"
         f"<< /Type /EmbeddedFile /Subtype /text#2Fxml /Length {len(xml_bytes)} >>\n"
         f"stream\n"
-    ).encode('ascii') + xml_bytes + b"\nendstream\nendobj\n\n"
+    ).encode('utf-8') + xml_bytes + b"\nendstream\nendobj\n\n"
 
+    # 2. Objeto FileSpec
+    safe_att_name = pdf_escape_str(attachment_name)
     filespec_obj = (
         f"{filespec_id} 0 obj\n"
-        f"<< /Type /Filespec /F ({attachment_name}) /UF ({attachment_name}) /EF << /F {ef_stream_id} 0 R >> >>\n"
+        f"<< /Type /Filespec /F ({safe_att_name}) /UF ({safe_att_name}) /EF << /F {ef_stream_id} 0 R >> >>\n"
         f"endobj\n\n"
-    ).encode('ascii')
+    ).encode('utf-8')
 
+    # 3. Árvore de Nomes EmbeddedFiles
     embedded_files_obj = (
         f"{embedded_files_id} 0 obj\n"
-        f"<< /Names [ ({attachment_name}) {filespec_id} 0 R ] >>\n"
+        f"<< /Names [ ({safe_att_name}) {filespec_id} 0 R ] >>\n"
         f"endobj\n\n"
-    ).encode('ascii')
+    ).encode('utf-8')
 
+    # 4. Objeto de Stream de Metadados XMP
     clean_summary = summary_meta.get('Subject', '').replace('<', '&lt;').replace('>', '&gt;')
     clean_title = summary_meta.get('Title', 'CV').replace('<', '&lt;').replace('>', '&gt;')
     xmp_packet = f"""<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
@@ -243,18 +259,19 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
         f"{xmp_metadata_id} 0 obj\n"
         f"<< /Type /Metadata /Subtype /XML /Length {len(xmp_packet)} >>\n"
         f"stream\n"
-    ).encode('ascii') + xmp_packet + b"\nendstream\nendobj\n\n"
+    ).encode('utf-8') + xmp_packet + b"\nendstream\nendobj\n\n"
 
-    author = summary_meta.get("Author", "Candidato").replace("(", "\\(").replace(")", "\\)")
-    title = summary_meta.get("Title", "CV").replace("(", "\\(").replace(")", "\\)")
-    keywords = summary_meta.get("Keywords", "").replace("(", "\\(").replace(")", "\\)")
-    subject = summary_meta.get("Subject", "").replace("(", "\\(").replace(")", "\\)")
+    # 5. Objeto Info
+    author = pdf_escape_str(summary_meta.get("Author", "Candidato"))
+    title = pdf_escape_str(summary_meta.get("Title", "CV"))
+    keywords = pdf_escape_str(summary_meta.get("Keywords", ""))
+    subject = pdf_escape_str(summary_meta.get("Subject", ""))
 
     info_obj = (
         f"{info_dict_id} 0 obj\n"
         f"<< /Title ({title}) /Author ({author}) /Subject ({subject}) /Keywords ({keywords}) /Producer (ATS XML CV Converter) >>\n"
         f"endobj\n\n"
-    ).encode('ascii')
+    ).encode('utf-8')
 
     root_match = re.search(rb'/Root\s+(\d+)\s+(\d+)\s+R', orig_data)
     orig_root_id = int(root_match.group(1)) if root_match else 1
@@ -263,7 +280,7 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
         f"{catalog_id} 0 obj\n"
         f"<< /Type /Catalog /Pages 2 0 R /Metadata {xmp_metadata_id} 0 R /Names << /EmbeddedFiles {embedded_files_id} 0 R >> >>\n"
         f"endobj\n\n"
-    ).encode('ascii')
+    ).encode('utf-8')
 
     new_objects = [ef_stream_obj, filespec_obj, embedded_files_obj, xmp_obj, info_obj, catalog_obj]
     
@@ -295,7 +312,7 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
         f"startxref\n"
         f"{xref_start}\n"
         f"%%EOF\n"
-    ).encode('ascii')
+    ).encode('utf-8')
 
     out.extend(xref_table)
 
@@ -326,7 +343,6 @@ def embed_xml_into_pdf(pdf_path: str, xml_path: str, output_path: str, attachmen
 
 def verify_pdf(pdf_path: str):
     """Verifica se há anexos XML e metadados incorporados dentro de um arquivo PDF."""
-    # Se a verificação for chamada com um caminho sem diretório, tenta em output/ primeiro se não achar no dir local
     if not os.path.exists(pdf_path):
         output_candidate = Path(DEFAULT_OUTPUT_DIR) / pdf_path
         if output_candidate.exists():
@@ -418,18 +434,18 @@ def main():
     parser = argparse.ArgumentParser(description="Incorporar ou Extrair descrição XML em PDF de Currículo para automação ATS.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Comando embed (incorporar)
+    # Comando embed
     embed_parser = subparsers.add_parser("embed", help="Incorpora arquivo XML em um Currículo PDF.")
     embed_parser.add_argument("--pdf", required=True, help="Caminho do arquivo PDF de entrada.")
     embed_parser.add_argument("--xml", required=True, help="Caminho do arquivo XML de entrada.")
     embed_parser.add_argument("--out", default=None, help="Caminho do arquivo PDF de saída (padrão: output/<nome_do_pdf>_ats.pdf)")
     embed_parser.add_argument("--name", default="resume.xml", help="Nome do arquivo anexo dentro do PDF (padrão: resume.xml)")
 
-    # Comando verify (verificar)
+    # Comando verify
     verify_parser = subparsers.add_parser("verify", help="Verifica se há XML e metadados incorporados em um Currículo PDF.")
     verify_parser.add_argument("--pdf", required=True, help="Caminho do arquivo PDF para verificação.")
 
-    # Comando extract (extrair)
+    # Comando extract
     extract_parser = subparsers.add_parser("extract", help="Extrai o XML incorporado de um Currículo PDF.")
     extract_parser.add_argument("--pdf", required=True, help="Caminho do arquivo PDF de entrada.")
     extract_parser.add_argument("--out", default="resume_extraido.xml", help="Caminho do arquivo XML de saída (padrão: output/resume_extraido.xml)")

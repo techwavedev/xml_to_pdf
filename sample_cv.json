@@ -1,0 +1,107 @@
+{
+  "language_code": "en",
+  "cv_labels": {
+    "about_me": "About me",
+    "professional_experience": "Work Experience",
+    "certifications": "Certifications",
+    "education": "Education",
+    "top_technologies": "Top Technologies",
+    "languages": "Languages",
+    "technology_experience": "Technology Experience",
+    "industry_experience": "Industry Experience",
+    "trainings": "Trainings",
+    "contact": "Contacts",
+    "education_and_training": "Education and Training",
+    "technical_skills": "Technical Skills",
+    "birthday": "Birthdate",
+    "nationality": "Nationality",
+    "summary": "Summary",
+    "mother_tongue": "Mother Tongue(s)",
+    "key_achievements": "Key Achievements",
+    "responsibilities": "Responsibilities",
+    "technologies": "Technologies",
+    "job_role": "Job Role",
+    "skills": "Skills",
+    "personal_details": "Personal Details",
+    "about": "About",
+    "name": "Name",
+    "key_competences": "Key Competences",
+    "work_history": "Work History",
+    "hobbies": "Hobbies",
+    "language_skills": "Language Skills"
+  },
+  "consultant": {
+    "id": 10001,
+    "email": "john.doe@example.com",
+    "name": "John",
+    "surname": "Doe",
+    "phone": "(+1) 555-0199",
+    "country": "United States",
+    "city": "San Francisco",
+    "address": "San Francisco, CA, USA",
+    "nationality": "American",
+    "gender": "Male",
+    "age": 35,
+    "driving_license": "Full",
+    "linkedin": "https://linkedin.com/in/johndoe",
+    "birthdate": "1990-01-01"
+  },
+  "about": "Senior DevOps & Cloud Solutions Engineer with 10+ years of experience in cloud infrastructure, CI/CD automation, Kubernetes orchestration, and system reliability engineering.",
+  "cv_summary": "- Over 10 years of experience in cloud infrastructure and enterprise DevOps engineering.\n- Extensive expertise in AWS and GCP cloud platforms, Terraform IaC, and Kubernetes orchestration.\n- Strong background in building CI/CD pipelines using GitHub Actions, GitLab CI, and Jenkins.\n- Skilled in monitoring and observability stacks (Prometheus, Grafana, ELK).",
+  "technical_skills": "DevOps, Cloud Infrastructure, AWS, GCP, Azure, Terraform, Ansible, Docker, Kubernetes, Helm, GitLab CI, GitHub Actions, Jenkins, Prometheus, Grafana, Python, Bash, Go, PostgreSQL, Redis, Linux Administration.",
+  "relevant_accomplishments": "• Architected high-availability cloud infrastructure on AWS reducing downtime by 99.99%.\n• Automated multi-region Kubernetes deployments cutting deployment times from hours to minutes.\n• Implemented FinOps cloud cost optimization strategies reducing annual infrastructure spend by 30%.",
+  "social_skills": "Strong leadership, communication skills, collaborative mindset, experience working with international cross-functional teams.",
+  "organisational_skills": "Excellent project coordination, incident management, agile methodologies, high adaptability under fast-paced environments.",
+  "hobbies": "Open-source contributing, hiking, photography, cycling.",
+  "highest_degree": {
+    "degree": "Bachelor degree",
+    "degree_short": "BSc",
+    "name": "Degree in Computer Science",
+    "years": 4,
+    "institution": "University of California",
+    "course_description": "Computer Science degree focusing on software engineering, distributed systems, and network protocols."
+  },
+  "educations": [
+    {
+      "degree": "Bachelor degree",
+      "degree_short": "BSc",
+      "course_name": "Degree in Computer Science",
+      "course_institution": "University of California",
+      "course_start_date_year": 2008,
+      "course_end_date_year": 2012,
+      "course_description": "Computer Science degree focusing on software engineering, distributed systems, and network protocols."
+    }
+  ],
+  "mother_languages": [
+    {
+      "name": "English",
+      "written_label": "C2",
+      "spoken_label": "C2",
+      "understanding_label": "C2",
+      "written_name": "Native"
+    }
+  ],
+  "other_languages": [
+    {
+      "name": "Spanish",
+      "written_label": "B2",
+      "spoken_label": "B2",
+      "understanding_label": "C1",
+      "written_name": "Professional working"
+    }
+  ],
+  "trainings": [
+    {
+      "name": "AWS Certified Solutions Architect - Professional",
+      "kind": "Certification",
+      "company": "Amazon Web Services",
+      "year": 2024
+    },
+    {
+      "name": "Certified Kubernetes Administrator (CKA)",
+      "kind": "Certification",
+      "company": "CNCF",
+      "year": 2023
+    }
+  ]
+}

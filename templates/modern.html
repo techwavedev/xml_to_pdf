@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="{{ language_code }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ consultant.name }} {{ consultant.surname }} - CV</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #2d3748;
+            background-color: #f7fafc;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .cv-container {
+            display: flex;
+            width: 100%;
+            min-height: 297mm;
+        }
+        /* Sidebar lateral (Esquerda) */
+        .sidebar {
+            width: 32%;
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 30px 20px;
+        }
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #3182ce;
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            border: 3px solid #63b3ed;
+        }
+        .candidate-name {
+            font-size: 22px;
+            font-weight: 700;
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 5px;
+        }
+        .candidate-title {
+            font-size: 13px;
+            text-align: center;
+            color: #63b3ed;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+        .sidebar-section {
+            margin-bottom: 25px;
+        }
+        .sidebar-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #63b3ed;
+            border-bottom: 1px solid #4a5568;
+            padding-bottom: 5px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        .contact-item {
+            margin-bottom: 8px;
+            word-break: break-word;
+            font-size: 12px;
+        }
+        .contact-label {
+            font-weight: bold;
+            color: #a0aec0;
+        }
+        .lang-list, .skill-list {
+            list-style: none;
+        }
+        .lang-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        .lang-badge {
+            background: #2b6cb0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #fff;
+        }
+
+        /* Conteúdo Principal (Direita) */
+        .main-content {
+            width: 68%;
+            padding: 35px 30px;
+            background: #ffffff;
+        }
+        .main-section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 16px;
+            color: #2b6cb0;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 700;
+            border-bottom: 2px solid #ebf8ff;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+        .summary-text, .about-text {
+            color: #4a5568;
+            font-size: 12.5px;
+            white-space: pre-line;
+            margin-bottom: 10px;
+        }
+        .accomplishment-item, .edu-item, .training-item {
+            margin-bottom: 10px;
+            color: #2d3748;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .edu-title {
+            font-weight: bold;
+            color: #2c5282;
+        }
+        .edu-institution {
+            color: #718096;
+            font-style: italic;
+        }
+        .skills-tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .skill-tag {
+            background: #edf2f7;
+            color: #2d3748;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="cv-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="avatar">{{ consultant.initials or consultant.name[:1] }}</div>
+            <div class="candidate-name">{{ consultant.name }} {{ consultant.surname }}</div>
+            <div class="candidate-title">{{ present_job_title or "DevOps & Cloud Specialist" }}</div>
+
+            <!-- Contatos -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">{{ cv_labels.contact or "Contacts" }}</div>
+                {% if consultant.email %}
+                <div class="contact-item"><span class="contact-label">Email:</span> {{ consultant.email }}</div>
+                {% endif %}
+                {% if consultant.phone %}
+                <div class="contact-item"><span class="contact-label">Phone:</span> {{ consultant.phone }}</div>
+                {% endif %}
+                {% if consultant.city or consultant.country %}
+                <div class="contact-item"><span class="contact-label">Location:</span> {{ consultant.city }}, {{ consultant.country }}</div>
+                {% endif %}
+                {% if consultant.linkedin %}
+                <div class="contact-item"><span class="contact-label">LinkedIn:</span> {{ consultant.linkedin }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Idiomas -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">{{ cv_labels.languages or "Languages" }}</div>
+                <div class="lang-list">
+                    {% for lang in mother_languages %}
+                    <div class="lang-item">
+                        <span>{{ lang.name }}</span>
+                        <span class="lang-badge">Mother Tongue</span>
+                    </div>
+                    {% endfor %}
+                    {% for lang in other_languages %}
+                    <div class="lang-item">
+                        <span>{{ lang.name }}</span>
+                        <span class="lang-badge">{{ lang.written_label or "Fluent" }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Detalhes Pessoais -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">{{ cv_labels.personal_details or "Personal Details" }}</div>
+                {% if consultant.nationality %}
+                <div class="contact-item"><span class="contact-label">Nationality:</span> {{ consultant.nationality }}</div>
+                {% endif %}
+                {% if consultant.driving_license %}
+                <div class="contact-item"><span class="contact-label">Driver License:</span> {{ consultant.driving_license }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Conteúdo Principal -->
+        <div class="main-content">
+            <!-- Sobre -->
+            {% if about %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.about or "About" }}</div>
+                <div class="about-text">{{ about }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Resumo Executivo -->
+            {% if cv_summary %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.summary or "Professional Summary" }}</div>
+                <div class="summary-text">{{ cv_summary }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Realizações Relevantes -->
+            {% if relevant_accomplishments %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.key_achievements or "Key Achievements" }}</div>
+                <div class="summary-text">{{ relevant_accomplishments }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Habilidades Técnicas -->
+            {% if technical_skills %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.technical_skills or "Technical Skills" }}</div>
+                <div class="summary-text">{{ technical_skills }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Formação Acadêmica -->
+            {% if educations %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.education or "Education" }}</div>
+                {% for edu in educations %}
+                <div class="edu-item">
+                    <div class="edu-title">{{ edu.course_name or edu.degree }}</div>
+                    <div class="edu-institution">{{ edu.course_institution }} {% if edu.course_end_date_year %}({{ edu.course_end_date_year }}){% endif %}</div>
+                    {% if edu.course_description %}
+                    <div style="color: #4a5568; margin-top: 2px;">{{ edu.course_description }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Cursos e Certificações -->
+            {% if trainings %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.certifications or "Certifications & Trainings" }}</div>
+                {% for tr in trainings %}
+                <div class="training-item">
+                    <strong>{{ tr.name }}</strong> - {{ tr.company }} ({{ tr.year }})
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
