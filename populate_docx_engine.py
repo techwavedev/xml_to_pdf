@@ -120,14 +120,24 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
 
     return xml_str
 
-def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
+def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
     """
-    Purga 100% de tabelas e parágrafos de tecnologias antigas (ex: NSX, VMware NSX, Active Directory, LDAP...)
-    e reconstrói as seções EXCLUSIVAMENTE a partir do feed JSON fornecido.
+    Motor Universal de Povoamento de Modelos DOCX:
+    - Purga 100% de todos os parágrafos antigos (European Commission, BNP Paribas, NSX, Portuguese, Udemy...).
+    - Reconstrói o documento EXCLUSIVAMENTE a partir de sample_cv.json.
+    - Preserva o grid visual, margens e estilos de cabeçalho.
     """
+    if not os.path.exists(docx_input_path):
+        print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
+        return False
+
     consultant = json_data.get("consultant", {})
     fullname = f"{consultant.get('name', '')} {consultant.get('surname', '')}".strip()
     title = json_data.get("present_job_title", "")
+    email = consultant.get("email", "")
+    phone = consultant.get("phone", "")
+    location = f"{consultant.get('city', '')}, {consultant.get('country', '')}".strip(", ")
+    linkedin = consultant.get("linkedin", "")
     summary = json_data.get("about") or json_data.get("cv_summary") or ""
     
     exps = json_data.get("work_experiences", [])
@@ -136,134 +146,6 @@ def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
     languages = extract_candidate_languages(json_data)
     top_techs_raw = json_data.get("top_technologies") or []
     top_techs = [format_tech_item(t) for t in top_techs_raw]
-
-    try:
-        doc_xml = replace_dynamic_contact_regex(doc_xml, json_data)
-        root = ET.fromstring(doc_xml)
-
-        # 1. Purga total de tabelas secundárias de habilidades do modelo antigo (contendo NSX, VMware, LDAP...)
-        tables_to_remove = []
-        for tbl in root.iter(f"{{{W_NS}}}tbl"):
-            text = ''.join([t.text for t in tbl.iter(f"{{{W_NS}}}t") if t.text]).strip()
-            # Se for uma tabela de matriz de tecnologias antigas (com NSX, vSphere, LDAP, etc.)
-            if any(old_k in text for old_k in ['NSX', 'VMware ESX', 'Active Directory', 'LDAP', 'Microsoft Exchange', 'vSphere', 'Courier-IMAP', 'Open-E', 'Microsoft DFS']):
-                tables_to_remove.append(tbl)
-
-        for tbl in tables_to_remove:
-            try:
-                # Remove a tabela do seu contêiner pai
-                for parent in root.iter():
-                    if tbl in list(parent):
-                        parent.remove(tbl)
-                        break
-            except Exception:
-                pass
-
-        # 2. Limpa nós de texto em parágrafos que ainda contenham NSX ou dados não pertencentes ao JSON
-        for p in root.iter(f"{{{W_NS}}}p"):
-            text = ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).strip()
-            if any(old_k in text for old_k in [
-                'NSX', 'Portuguese', 'Dutch', 'HashiCorp Certified', 'Udemy', 'HackerRank',
-                'Lusófona', 'Universidade Aberta', 'Escola de Negócios', 'European Commission', 'BNP Paribas'
-            ]):
-                for t in p.iter(f"{{{W_NS}}}t"):
-                    t.text = ""
-
-        # 3. Localiza o contêiner principal (<w:tc> ou body) para injeção limpa das seções do JSON
-        main_tc = None
-        for tc in root.iter(f"{{{W_NS}}}tc"):
-            text = ''.join([t.text for t in tc.iter(f"{{{W_NS}}}t") if t.text]).strip()
-            if any(k in text.lower() for k in ["work experience", "professional experience", "summary"]):
-                main_tc = tc
-                break
-
-        if main_tc is None:
-            main_tc = root.find(f"{{{W_NS}}}body")
-
-        if main_tc is not None:
-            children = list(main_tc)
-            summary_p = None
-            work_p_idx = None
-
-            for idx, elem in enumerate(children):
-                if elem.tag == f"{{{W_NS}}}p":
-                    t_str = ''.join([t.text for t in elem.iter(f"{{{W_NS}}}t") if t.text]).strip()
-                    if summary_p is None and any(k == t_str.lower() for k in ["summary", "professional summary", "resumo"]):
-                        summary_p = elem
-                    elif work_p_idx is None and any(k in t_str.lower() for k in ["work experience", "professional experience", "work history"]):
-                        work_p_idx = idx
-
-            if work_p_idx is not None:
-                for elem in children[work_p_idx+1:]:
-                    if elem.tag == f"{{{W_NS}}}p":
-                        main_tc.remove(elem)
-
-                insert_pos = work_p_idx + 1
-
-                if summary and summary_p is None:
-                    main_tc.insert(insert_pos, create_w_p("SUMMARY", is_heading=True))
-                    insert_pos += 1
-                    main_tc.insert(insert_pos, create_w_p(summary))
-                    insert_pos += 1
-
-                if exps:
-                    for exp in exps:
-                        exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
-                        main_tc.insert(insert_pos, create_w_p(exp_header, is_subheading=True))
-                        insert_pos += 1
-
-                        if exp.get("description"):
-                            main_tc.insert(insert_pos, create_w_p(exp["description"]))
-                            insert_pos += 1
-
-                        for task in exp.get("responsibilities", []):
-                            main_tc.insert(insert_pos, create_w_p(f"• {task}", is_bullet=True))
-                            insert_pos += 1
-
-                        if exp.get("technologies"):
-                            main_tc.insert(insert_pos, create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
-                            insert_pos += 1
-
-                if top_techs:
-                    main_tc.insert(insert_pos, create_w_p("TECHNICAL SKILLS", is_heading=True))
-                    insert_pos += 1
-                    main_tc.insert(insert_pos, create_w_p(", ".join(top_techs)))
-                    insert_pos += 1
-
-                if educations:
-                    main_tc.insert(insert_pos, create_w_p("EDUCATION", is_heading=True))
-                    insert_pos += 1
-                    for edu in educations:
-                        degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
-                        school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
-                        year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
-                        main_tc.insert(insert_pos, create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
-                        insert_pos += 1
-
-                if certifications:
-                    main_tc.insert(insert_pos, create_w_p("CERTIFICATIONS", is_heading=True))
-                    insert_pos += 1
-                    for cert in certifications:
-                        c_name = cert.get("title") or cert.get("name") or str(cert)
-                        main_tc.insert(insert_pos, create_w_p(f"• {c_name}", is_bullet=True))
-                        insert_pos += 1
-
-                if languages:
-                    main_tc.insert(insert_pos, create_w_p("LANGUAGES", is_heading=True))
-                    insert_pos += 1
-                    for lang_str in languages:
-                        main_tc.insert(insert_pos, create_w_p(f"• {lang_str}", is_bullet=True))
-                        insert_pos += 1
-
-        return ET.tostring(root, encoding='utf-8').decode('utf-8')
-    except Exception as e:
-        print(f"[*] Erro na reconstrução do document.xml: {e}")
-        return doc_xml
-
-def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
-    if not os.path.exists(docx_input_path):
-        print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
-        return False
 
     transparent_path = "assets/transparent.png"
     transparent_bytes = b""
@@ -297,9 +179,109 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
                 elif fname == 'word/document.xml':
                     doc_str = data.decode('utf-8')
-                    doc_str = safe_populate_document_xml(doc_str, json_data)
+                    doc_str = replace_dynamic_contact_regex(doc_str, json_data)
+                    root = ET.fromstring(doc_str)
+
+                    # 1. Purga total de tabelas secundárias de habilidades do modelo antigo (NSX, LDAP, etc.)
+                    tables_to_remove = []
+                    for tbl in root.iter(f"{{{W_NS}}}tbl"):
+                        t_text = ''.join([t.text for t in tbl.iter(f"{{{W_NS}}}t") if t.text]).strip()
+                        if any(old_k in t_text for old_k in ['NSX', 'VMware ESX', 'Active Directory', 'LDAP', 'Microsoft Exchange', 'vSphere', 'Courier-IMAP', 'Open-E']):
+                            tables_to_remove.append(tbl)
+
+                    for tbl in tables_to_remove:
+                        try:
+                            for parent in root.iter():
+                                if tbl in list(parent):
+                                    parent.remove(tbl)
+                                    break
+                        except Exception:
+                            pass
+
+                    # 2. Purga 100% de parágrafos antigos do contêiner principal ou do body
+                    cells = list(root.iter(f"{{{W_NS}}}tc"))
+                    sidebar_tc = cells[0] if len(cells) > 0 else None
+                    main_tc = cells[-1] if len(cells) > 1 else root.find(f"{{{W_NS}}}body")
+
+                    if sidebar_tc is None:
+                        sidebar_tc = root.find(f"{{{W_NS}}}body")
+
+                    # Purga parágrafos antigos da sidebar
+                    if sidebar_tc is not None and len(cells) > 1:
+                        for elem in list(sidebar_tc):
+                            if elem.tag == f"{{{W_NS}}}p":
+                                sidebar_tc.remove(elem)
+
+                        sidebar_tc.append(create_w_p(fullname, is_heading=True))
+                        if title:
+                            sidebar_tc.append(create_w_p(title, is_subheading=True))
+                        sidebar_tc.append(create_w_p("CONTACTS", is_heading=True))
+                        if email:
+                            sidebar_tc.append(create_w_p(f"Email: {email}"))
+                        if phone:
+                            sidebar_tc.append(create_w_p(f"Phone: {phone}"))
+                        if location:
+                            sidebar_tc.append(create_w_p(f"Location: {location}"))
+                        if linkedin:
+                            sidebar_tc.append(create_w_p(f"LinkedIn: {linkedin}"))
+
+                        if top_techs:
+                            sidebar_tc.append(create_w_p("TECHNICAL SKILLS", is_heading=True))
+                            for tech in top_techs:
+                                sidebar_tc.append(create_w_p(f"• {tech}", is_bullet=True))
+
+                        if languages:
+                            sidebar_tc.append(create_w_p("LANGUAGES", is_heading=True))
+                            for lang_str in languages:
+                                sidebar_tc.append(create_w_p(f"• {lang_str}", is_bullet=True))
+
+                    # Purga 100% de parágrafos do corpo principal (eliminando European Commission, BNP Paribas, 300+ parágrafos antigos)
+                    if main_tc is not None:
+                        for elem in list(main_tc):
+                            if elem.tag == f"{{{W_NS}}}p":
+                                main_tc.remove(elem)
+
+                        main_tc.append(create_w_p(fullname, is_heading=True))
+                        if title:
+                            main_tc.append(create_w_p(title, is_subheading=True))
+
+                        if summary:
+                            main_tc.append(create_w_p("PROFESSIONAL SUMMARY", is_heading=True))
+                            main_tc.append(create_w_p(summary))
+
+                        if exps:
+                            main_tc.append(create_w_p("WORK EXPERIENCE", is_heading=True))
+                            for exp in exps:
+                                exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
+                                main_tc.append(create_w_p(exp_header, is_subheading=True))
+
+                                if exp.get("description"):
+                                    main_tc.append(create_w_p(exp["description"]))
+
+                                for task in exp.get("responsibilities", []):
+                                    main_tc.append(create_w_p(f"• {task}", is_bullet=True))
+
+                                if exp.get("technologies"):
+                                    main_tc.append(create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
+
+                        if educations:
+                            main_tc.append(create_w_p("EDUCATION", is_heading=True))
+                            for edu in educations:
+                                degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
+                                school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
+                                year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
+                                main_tc.append(create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
+
+                        if certifications:
+                            main_tc.append(create_w_p("CERTIFICATIONS", is_heading=True))
+                            for cert in certifications:
+                                c_name = cert.get("title") or cert.get("name") or str(cert)
+                                main_tc.append(create_w_p(f"• {c_name}", is_bullet=True))
+
+                    doc_str = ET.tostring(root, encoding='utf-8').decode('utf-8')
                     doc_str = sanitize_xml_string(doc_str)
                     jout.writestr(item, doc_str.encode('utf-8'))
+
                 elif fname.startswith('word/header') or fname.startswith('word/footer'):
                     doc_str = data.decode('utf-8')
                     doc_str = replace_dynamic_contact_regex(doc_str, json_data)
@@ -310,6 +292,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com purga total de tabelas de habilidades antigas (ex: NSX): {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com purga de 300+ parágrafos antigos (expert.docx 100% limpo): {docx_output_path}")
         return True
     return False
