@@ -27,52 +27,33 @@ Seu currículo em PDF mantém seu visual gráfico original e elegante, enquanto 
 
 ---
 
-## 🚀 Guia de Uso Rápido
+## 🚀 Guia de Uso Rápido (Saída Padrão na Pasta `output/`)
 
 ### 1. Prepare seus dados XML do Currículo
 Personalize o arquivo `sample_cv.xml` ou crie seu próprio arquivo `resume.xml` com seus dados pessoais (Contato, Habilidades, Experiência, Educação).
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<Resume xmlns="http://ns.hr-xml.org/2007-04-15" version="3.0">
-  <StructuredXMLResume>
-    <ContactInfo>
-      <PersonName>
-        <GivenName>João</GivenName>
-        <FamilyName>Silva</FamilyName>
-      </PersonName>
-      <ContactMethod>
-        <InternetEmailAddress>joao.silva@example.com</InternetEmailAddress>
-      </ContactMethod>
-    </ContactInfo>
-    <CoreCompetencies>
-      <Skill>Python</Skill>
-      <Skill>FastAPI</Skill>
-      <Skill>Docker</Skill>
-    </CoreCompetencies>
-  </StructuredXMLResume>
-</Resume>
-```
-
-### 2. Incorporar o XML no Currículo PDF (salvando na pasta `output/`)
-Execute o comando `embed` definindo o destino dentro da pasta `output/`:
+### 2. Incorporar o XML no Currículo PDF
+Por padrão, a saída será gerada **automaticamente na pasta `output/`**:
 
 ```bash
-python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml sample_cv.xml --out output/meu_curriculo_ats.pdf
+# Gera o arquivo otimizado em: output/meu_curriculo_ats.pdf
+python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml sample_cv.xml
 ```
 
+*(Opcional: Você pode especificar um nome personalizado com `--out meu_nome.pdf`, e o script salvará em `output/meu_nome.pdf`).*
+
 ### 3. Verificar os Metadados e Anexos Incorporados
-Confirme se o fluxo XML e os anexos foram incorporados corretamente:
+Verifique o arquivo gerado na pasta `output/`:
 
 ```bash
 python3 embed_xml_cv.py verify --pdf output/meu_curriculo_ats.pdf
 ```
 
 ### 4. Extrair o XML de um Currículo PDF
-Extraia o XML estruturado de volta do arquivo PDF:
+Extrai o XML de volta do PDF (salva por padrão em `output/resume_extraido.xml`):
 
 ```bash
-python3 embed_xml_cv.py extract --pdf output/meu_curriculo_ats.pdf --out output/resume_extraido.xml
+python3 embed_xml_cv.py extract --pdf output/meu_curriculo_ats.pdf
 ```
 
 ---
@@ -87,7 +68,7 @@ A pasta `output/`, os arquivos de saída `.pdf`, `.xml` extraídos e templates p
 
 - `embed_xml_cv.py`: Ferramenta principal em linha de comando (CLI) para incorporar, verificar e extrair XML em PDFs.
 - `sample_cv.xml`: Modelo padrão no formato HR-XML pronto para ser personalizado.
-- `output/`: Pasta de saída para onde os PDFs e XMLs gerados são gravados (ignorada no Git).
+- `output/`: Pasta de saída padrão para onde todos os PDFs e XMLs gerados são gravados (ignorada no Git).
 - `.gitignore`: Regras de exclusão do Git para não versionar CVs pessoais e saídas.
 - `generate_sample_pdf.py`: Script auxiliar para gerar um PDF de teste.
 - `requirements.txt`: Arquivo de dependências (`pypdf`).
