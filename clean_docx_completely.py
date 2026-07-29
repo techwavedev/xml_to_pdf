@@ -2,27 +2,51 @@ import zipfile
 import os
 import hashlib
 
-def clean_docx_sprint(docx_input_path: str, docx_output_path: str):
+import zipfile
+import os
+import hashlib
+import io
+import json
+import re
+from PIL import Image
+
+def get_candidate_photo_bytes(photo_path: str = None, target_format: str = 'JPEG') -> bytes:
+    """Retorna os bytes da foto do candidato (assets/photo.png ou parâmetro) convertidos para o formato desejado."""
+    if not photo_path or not os.path.exists(photo_path):
+        photo_path = "assets/photo.png"
+    if not os.path.exists(photo_path):
+        photo_path = "assets/original_candidate_photo.jpeg"
+    if not os.path.exists(photo_path):
+        photo_path = "assets/fake_large.jpeg"
+
+    try:
+        with Image.open(photo_path) as img:
+            img_rgb = img.convert("RGB")
+            buf = io.BytesIO()
+            img_rgb.save(buf, format=target_format, quality=92)
+            return buf.getvalue()
+    except Exception as e:
+        print(f"[*] Aviso ao carregar foto {photo_path}: {e}")
+        with open(photo_path, "rb") as f:
+            return f.read()
+
+def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: str = None, json_data: dict = None):
     """
-    Limpa um template .docx do SprintCV:
-    1. Substitui logos do SprintCV por PNG transparente 1x1 (layout intacto!)
-    2. Substitui foto(s) do candidato por fotos fake de pessoa genérica
-    Não altera NENHUM XML, mantendo 100% do design, fundo e ícones.
+    Limpa e atualiza um template .docx:
+    1. Substitui logos do SprintCV por PNG transparente 1x1 (layout intacto).
+    2. Substitui a foto do candidato no DOCX por assets/photo.png (ou photo_path).
+    3. Se json_data for fornecido, atualiza dados do candidato em word/document.xml.
+    4. Preserva o fundo de constelação e ícones originais.
     """
     if not os.path.exists(docx_input_path):
         print(f"[❌] Arquivo não encontrado: {docx_input_path}")
         return
         
     transparent_path = "assets/transparent.png"
-    fake_large_path = "assets/fake_large.jpeg"
-    fake_small_path = "assets/fake_small.jpeg"
-    
     with open(transparent_path, "rb") as f:
         transparent_data = f.read()
-    with open(fake_large_path, "rb") as f:
-        fake_large_data = f.read()
-    with open(fake_small_path, "rb") as f:
-        fake_small_data = f.read()
+    
+    candidate_photo_data = get_candidate_photo_bytes(photo_path, target_format='JPEG')
 
     # Hashes SHA-256 (primeiros 12 chars) das logos do SprintCV
     SPRINT_LOGO_HASHES = {
@@ -48,30 +72,50 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str):
                         jout.writestr(item, transparent_data)
                         print(f"[🗑️] Logo SprintCV ({fname}, {len(data)}b) -> transparente!")
                     
-                    # Foto JPEG do candidato -> foto fake de pessoa
-                    elif fname.endswith('.jpeg') or fname.endswith('.jpg'):
-                        # Decide qual tamanho usar com base no tamanho original
-                        if len(data) > 50000:
-                            jout.writestr(item, fake_large_data)
-                            print(f"[🛡️] Foto grande ({fname}, {len(data)}b) -> fake person large!")
+                    # Foto JPEG do candidato -> substitui por photo.png
+                    elif fname.endswith('.jpeg') or fname.endswith('.jpg') or 'foto' in fname.lower():
+                        # Não substitui a watermark de fundo (image7.jpeg ~228KB)
+                        if len(data) < 200000:
+                            jout.writestr(item, candidate_photo_data)
+                            print(f"[🖼️] Foto do candidato ({fname}, {len(data)}b) -> substituída por photo.png ({len(candidate_photo_data)}b)!")
                         else:
-                            jout.writestr(item, fake_small_data)
-                            print(f"[🛡️] Foto pequena ({fname}, {len(data)}b) -> fake person small!")
+                            # Imagem de fundo watermark preservada
+                            jout.writestr(item, data)
+                            print(f"[✓] Fundo watermark mantido intacto: {fname} ({len(data)}b)")
                     else:
                         # Manter SVGs, fundos de constelação e outros PNGs intactos
                         jout.writestr(item, data)
                         print(f"[✓] Mantido intacto: {fname} ({len(data)}b)")
+                elif fname == 'word/document.xml' and json_data:
+                    # Substituir dados do candidato se houver json_data
+                    doc_str = data.decode('utf-8')
+                    consultant = json_data.get("consultant", {})
+                    name = consultant.get("name", "")
+                    surname = consultant.get("surname", "")
+                    fullname = f"{name} {surname}".strip()
+                    title = json_data.get("present_job_title", "")
+                    email = consultant.get("email", "")
+                    phone = consultant.get("phone", "")
+
+                    if fullname:
+                        doc_str = re.sub(r'Elton Machado', fullname, doc_str)
+                    if title:
+                        doc_str = re.sub(r'DevOps Engineer', title, doc_str)
+                    
+                    jout.writestr(item, doc_str.encode('utf-8'))
+                    print(f"[📝] document.xml atualizado com dados de {fullname} ({title})")
                 else:
                     jout.writestr(item, data)
                 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"\n[🎉] Sucesso! Template limpo salvo em: {docx_output_path}")
+        print(f"\n[🎉] Sucesso! Template atualizado salvo em: {docx_output_path}")
         print(f"     - Logos SprintCV: invisíveis")
-        print(f"     - Foto do candidato: substituída por pessoa genérica")
+        print(f"     - Foto do candidato: atualizada com assets/photo.png")
         print(f"     - Design, fundo e ícones: 100% preservados")
 
 if __name__ == "__main__":
-    src = "Samples/sprint.docx"
-    dst = "Samples/sprint_clean.docx"
+    src = "samples/sprint.docx"
+    dst = "output/sprint_clean_test.docx"
     clean_docx_sprint(src, dst)
+
