@@ -54,26 +54,32 @@ Personalize o arquivo `sample_cv.xml` ou crie seu próprio arquivo `resume.xml` 
 </Resume>
 ```
 
-### 2. Incorporar o XML no Currículo PDF
-Execute o comando `embed`:
+### 2. Incorporar o XML no Currículo PDF (salvando na pasta `output/`)
+Execute o comando `embed` definindo o destino dentro da pasta `output/`:
 
 ```bash
-python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml sample_cv.xml --out meu_curriculo_ats.pdf
+python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml sample_cv.xml --out output/meu_curriculo_ats.pdf
 ```
 
 ### 3. Verificar os Metadados e Anexos Incorporados
 Confirme se o fluxo XML e os anexos foram incorporados corretamente:
 
 ```bash
-python3 embed_xml_cv.py verify --pdf meu_curriculo_ats.pdf
+python3 embed_xml_cv.py verify --pdf output/meu_curriculo_ats.pdf
 ```
 
 ### 4. Extrair o XML de um Currículo PDF
 Extraia o XML estruturado de volta do arquivo PDF:
 
 ```bash
-python3 embed_xml_cv.py extract --pdf meu_curriculo_ats.pdf --out resume_extraido.xml
+python3 embed_xml_cv.py extract --pdf output/meu_curriculo_ats.pdf --out output/resume_extraido.xml
 ```
+
+---
+
+## 🔒 Controle de Versão (Git / .gitignore)
+
+A pasta `output/`, os arquivos de saída `.pdf`, `.xml` extraídos e templates pessoais estão ignorados no [.gitignore](file:///Users/elton/Library/CloudStorage/SynologyDrive-m1/code/xml_to_pdf/.gitignore) para garantir que seus currículos gerados não sejam sincronizados acidentalmente no repositório.
 
 ---
 
@@ -81,5 +87,7 @@ python3 embed_xml_cv.py extract --pdf meu_curriculo_ats.pdf --out resume_extraid
 
 - `embed_xml_cv.py`: Ferramenta principal em linha de comando (CLI) para incorporar, verificar e extrair XML em PDFs.
 - `sample_cv.xml`: Modelo padrão no formato HR-XML pronto para ser personalizado.
+- `output/`: Pasta de saída para onde os PDFs e XMLs gerados são gravados (ignorada no Git).
+- `.gitignore`: Regras de exclusão do Git para não versionar CVs pessoais e saídas.
 - `generate_sample_pdf.py`: Script auxiliar para gerar um PDF de teste.
 - `requirements.txt`: Arquivo de dependências (`pypdf`).

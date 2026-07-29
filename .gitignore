@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+ENV/
+
+# Output directory for generated CVs and files (only .gitkeep is tracked)
+output/*
+!output/.gitkeep
+output_cvs/
+dist/
+build/
+
+# Ignore generated/personal PDF and XML output files
+*.pdf
+!sample_cv.pdf
+extracted_*.xml
+
+# Personal templates and local files
+templates/personal/
+personal/
+*.local.xml
+*.env
+
+# Operating System & IDEs
+.DS_Store
+.vscode/
+.idea/

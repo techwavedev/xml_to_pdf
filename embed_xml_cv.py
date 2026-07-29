@@ -16,14 +16,14 @@ incorporando XML estruturado (padrão HR-XML) diretamente no PDF de 3 formas com
    e /Subject para extratores e sistemas ATS legados.
 
 Uso:
-  # 1. Incorporar XML em um Currículo PDF:
-  python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml resume.xml --out meu_curriculo_ats.pdf
+  # 1. Incorporar XML em um Currículo PDF (vai por padrão para a pasta output/):
+  python3 embed_xml_cv.py embed --pdf meu_curriculo.pdf --xml sample_cv.xml
 
   # 2. Verificar metadados XML incorporados em um PDF existente:
-  python3 embed_xml_cv.py verify --pdf meu_curriculo_ats.pdf
+  python3 embed_xml_cv.py verify --pdf output/meu_curriculo_ats.pdf
 
   # 3. Extrair XML anexo de um Currículo PDF:
-  python3 embed_xml_cv.py extract --pdf meu_curriculo_ats.pdf --out resume_extraido.xml
+  python3 embed_xml_cv.py extract --pdf output/meu_curriculo_ats.pdf
 
 Mecanismo:
   Suporta a biblioteca 'pypdf' (se instalada) ou fallback nativo da biblioteca padrão do Python.
@@ -36,6 +36,21 @@ import re
 import argparse
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+DEFAULT_OUTPUT_DIR = "output"
+
+def ensure_output_dir(path_str: str) -> str:
+    """Garante que o caminho de saída esteja dentro da pasta output/ e que o diretório exista."""
+    path = Path(path_str)
+    # Se o caminho for apenas um nome de arquivo ou não estiver explicitamente em output/, direciona para output/
+    if not path.is_absolute() and len(path.parts) == 1:
+        path = Path(DEFAULT_OUTPUT_DIR) / path
+    
+    # Cria o diretório pai caso não exista
+    if path.parent:
+        os.makedirs(path.parent, exist_ok=True)
+        
+    return str(path)
 
 def validate_xml(xml_path: str) -> str:
     """Valida a sintaxe do arquivo XML e retorna seu conteúdo como texto."""
@@ -55,7 +70,6 @@ def extract_summary_fields(xml_content: str) -> dict:
     try:
         root = ET.fromstring(xml_content)
         
-        # Função auxiliar para buscar a primeira tag encontrada entre as opções
         def find_first(tags):
             for tag in tags:
                 elem = root.find(f".//{tag}")
@@ -75,7 +89,6 @@ def extract_summary_fields(xml_content: str) -> dict:
         title = find_first(["Title", "JobTitle", "Headline", "Position"])
         summary = find_first(["ExecutiveSummary", "Summary", "Profile", "Objective"])
         
-        # Extrai habilidades para compor as palavras-chave (keywords)
         skills = []
         for elem in root.findall(".//Skill"):
             if elem.text and elem.text.strip():
@@ -165,6 +178,7 @@ def embed_xml_pypdf(pdf_path: str, xml_path: str, output_path: str, attachment_n
     })
     print(f"[✓] Injetado fluxo de metadados XMP RDF no Catálogo do PDF.")
 
+    output_path = ensure_output_dir(output_path)
     with open(output_path, "wb") as f:
         writer.write(f)
 
@@ -179,12 +193,10 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
     with open(pdf_path, 'rb') as f:
         orig_data = f.read()
 
-    # Encontra o maior número de objeto no PDF original
     obj_pattern = re.compile(rb'(\d+)\s+(\d+)\s+obj')
     matches = obj_pattern.findall(orig_data)
     max_obj_id = max([int(m[0]) for m in matches]) if matches else 10
 
-    # Novos IDs de objetos
     ef_stream_id = max_obj_id + 1
     filespec_id = max_obj_id + 2
     embedded_files_id = max_obj_id + 3
@@ -192,28 +204,24 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
     info_dict_id = max_obj_id + 5
     catalog_id = max_obj_id + 6
 
-    # 1. Objeto Stream do Arquivo Anexo
     ef_stream_obj = (
         f"{ef_stream_id} 0 obj\n"
         f"<< /Type /EmbeddedFile /Subtype /text#2Fxml /Length {len(xml_bytes)} >>\n"
         f"stream\n"
     ).encode('ascii') + xml_bytes + b"\nendstream\nendobj\n\n"
 
-    # 2. Objeto FileSpec
     filespec_obj = (
         f"{filespec_id} 0 obj\n"
         f"<< /Type /Filespec /F ({attachment_name}) /UF ({attachment_name}) /EF << /F {ef_stream_id} 0 R >> >>\n"
         f"endobj\n\n"
     ).encode('ascii')
 
-    # 3. Árvore de Nomes EmbeddedFiles
     embedded_files_obj = (
         f"{embedded_files_id} 0 obj\n"
         f"<< /Names [ ({attachment_name}) {filespec_id} 0 R ] >>\n"
         f"endobj\n\n"
     ).encode('ascii')
 
-    # 4. Objeto de Stream de Metadados XMP
     clean_summary = summary_meta.get('Subject', '').replace('<', '&lt;').replace('>', '&gt;')
     clean_title = summary_meta.get('Title', 'CV').replace('<', '&lt;').replace('>', '&gt;')
     xmp_packet = f"""<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
@@ -237,7 +245,6 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
         f"stream\n"
     ).encode('ascii') + xmp_packet + b"\nendstream\nendobj\n\n"
 
-    # 5. Objeto Info
     author = summary_meta.get("Author", "Candidato").replace("(", "\\(").replace(")", "\\)")
     title = summary_meta.get("Title", "CV").replace("(", "\\(").replace(")", "\\)")
     keywords = summary_meta.get("Keywords", "").replace("(", "\\(").replace(")", "\\)")
@@ -249,18 +256,15 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
         f"endobj\n\n"
     ).encode('ascii')
 
-    # Localiza a raiz do catálogo no PDF original
     root_match = re.search(rb'/Root\s+(\d+)\s+(\d+)\s+R', orig_data)
     orig_root_id = int(root_match.group(1)) if root_match else 1
 
-    # 6. Objeto de Catálogo Atualizado
     catalog_obj = (
         f"{catalog_id} 0 obj\n"
         f"<< /Type /Catalog /Pages 2 0 R /Metadata {xmp_metadata_id} 0 R /Names << /EmbeddedFiles {embedded_files_id} 0 R >> >>\n"
         f"endobj\n\n"
     ).encode('ascii')
 
-    # Junta novos objetos para a atualização incremental
     new_objects = [ef_stream_obj, filespec_obj, embedded_files_obj, xmp_obj, info_obj, catalog_obj]
     
     start_offset = len(orig_data)
@@ -295,6 +299,7 @@ def embed_xml_native(pdf_path: str, xml_path: str, output_path: str, attachment_
 
     out.extend(xref_table)
 
+    output_path = ensure_output_dir(output_path)
     with open(output_path, "wb") as f:
         f.write(out)
 
@@ -321,9 +326,14 @@ def embed_xml_into_pdf(pdf_path: str, xml_path: str, output_path: str, attachmen
 
 def verify_pdf(pdf_path: str):
     """Verifica se há anexos XML e metadados incorporados dentro de um arquivo PDF."""
+    # Se a verificação for chamada com um caminho sem diretório, tenta em output/ primeiro se não achar no dir local
     if not os.path.exists(pdf_path):
-        print(f"[❌] Arquivo não encontrado: {pdf_path}")
-        sys.exit(1)
+        output_candidate = Path(DEFAULT_OUTPUT_DIR) / pdf_path
+        if output_candidate.exists():
+            pdf_path = str(output_candidate)
+        else:
+            print(f"[❌] Arquivo não encontrado: {pdf_path}")
+            sys.exit(1)
 
     print(f"\n=======================================================")
     print(f" Verificando Anexos e Metadados do PDF: {pdf_path}")
@@ -332,7 +342,6 @@ def verify_pdf(pdf_path: str):
     with open(pdf_path, 'rb') as f:
         data = f.read()
 
-    # Verifica fluxos brutos incorporados
     has_xml_attachment = b'resume.xml' in data or b'EmbeddedFile' in data
     has_xmp = b'x:xmpmeta' in data or b'StructuredResumeData' in data or b'/Metadata' in data
     has_info = b'/Keywords' in data or b'/Author' in data or b'/Title' in data
@@ -373,15 +382,20 @@ def verify_pdf(pdf_path: str):
 def extract_xml_from_pdf(pdf_path: str, output_xml: str):
     """Extrai o anexo XML incorporado ou os metadados XMP do PDF para um arquivo .xml."""
     if not os.path.exists(pdf_path):
-        print(f"[❌] Arquivo não encontrado: {pdf_path}")
-        sys.exit(1)
+        output_candidate = Path(DEFAULT_OUTPUT_DIR) / pdf_path
+        if output_candidate.exists():
+            pdf_path = str(output_candidate)
+        else:
+            print(f"[❌] Arquivo não encontrado: {pdf_path}")
+            sys.exit(1)
+
+    output_xml = ensure_output_dir(output_xml)
 
     with open(pdf_path, 'rb') as f:
         data = f.read()
 
     xml_content = None
 
-    # Verifica o pacote XMP nos bytes do arquivo
     if b'StructuredResumeData' in data:
         m = re.search(rb'<!\[CDATA\[(.*?)\]\]>', data, re.DOTALL)
         if m:
@@ -408,7 +422,7 @@ def main():
     embed_parser = subparsers.add_parser("embed", help="Incorpora arquivo XML em um Currículo PDF.")
     embed_parser.add_argument("--pdf", required=True, help="Caminho do arquivo PDF de entrada.")
     embed_parser.add_argument("--xml", required=True, help="Caminho do arquivo XML de entrada.")
-    embed_parser.add_argument("--out", required=True, help="Caminho do arquivo PDF de saída.")
+    embed_parser.add_argument("--out", default=None, help="Caminho do arquivo PDF de saída (padrão: output/<nome_do_pdf>_ats.pdf)")
     embed_parser.add_argument("--name", default="resume.xml", help="Nome do arquivo anexo dentro do PDF (padrão: resume.xml)")
 
     # Comando verify (verificar)
@@ -418,11 +432,14 @@ def main():
     # Comando extract (extrair)
     extract_parser = subparsers.add_parser("extract", help="Extrai o XML incorporado de um Currículo PDF.")
     extract_parser.add_argument("--pdf", required=True, help="Caminho do arquivo PDF de entrada.")
-    extract_parser.add_argument("--out", default="resume_extraido.xml", help="Caminho do arquivo XML de saída.")
+    extract_parser.add_argument("--out", default="resume_extraido.xml", help="Caminho do arquivo XML de saída (padrão: output/resume_extraido.xml)")
 
     args = parser.parse_args()
 
     if args.command == "embed":
+        if args.out is None:
+            pdf_stem = Path(args.pdf).stem
+            args.out = f"{pdf_stem}_ats.pdf"
         embed_xml_into_pdf(args.pdf, args.xml, args.out, attachment_name=args.name)
     elif args.command == "verify":
         verify_pdf(args.pdf)
