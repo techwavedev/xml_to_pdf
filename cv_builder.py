@@ -37,12 +37,22 @@ TEMPLATES_DIR = Path("templates")
 OUTPUT_DIR = Path("output")
 
 def convert_docx_to_pdf_cross_platform(docx_path: str, pdf_path: str) -> bool:
-    """Converte um arquivo .docx para PDF de forma multiplataforma (macOS, Windows, Linux)."""
+    """Converte um arquivo .docx para PDF de forma 100% nativa (macOS, Windows, Linux)."""
     abs_docx = os.path.abspath(docx_path)
     abs_pdf = os.path.abspath(pdf_path)
     system = platform.system()
 
-    # 1. No Windows (se MS Word estiver instalado)
+    # 1. Tenta docx2pdf (Super confiável no macOS e Windows com MS Word)
+    try:
+        from docx2pdf import convert
+        convert(abs_docx, abs_pdf)
+        if os.path.exists(abs_pdf) and os.path.getsize(abs_pdf) > 0:
+            print(f"[✓] DOCX convertido para PDF via docx2pdf (MS Word Engine): {pdf_path}")
+            return True
+    except Exception as e_docx2pdf:
+        pass
+
+    # 2. No Windows (se MS Word estiver instalado)
     if system == "Windows":
         try:
             import win32com.client
@@ -332,37 +342,23 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés, atualiza foto/dados e tenta conversão nativa
-    if docx_template and os.path.exists(docx_template):
+    # 2. Renderização 100% Python do PDF a partir do modelo visual
+    print(f"\n[*] Processando em modo 100% Python (Design: {effective_template})...")
+    
+    # Se o usuário solicitou especificamente a saída em .docx via --out-docx
+    if docx_template and os.path.exists(docx_template) and out_docx:
         sample_stem = Path(docx_template).stem
-        print(f"\n[*] Utilizando modelo .docx de entrada: {docx_template} (Design: {effective_template})")
-        
         populated_docx = str(OUTPUT_DIR / f"{sample_stem}_{c_name}.docx")
         clean_docx_completely.clean_docx_sprint(docx_template, populated_docx, photo_path="assets/photo.png", json_data=json_data)
-        
-        # Converte o .docx para PDF de forma nativa
-        success = convert_docx_to_pdf_cross_platform(populated_docx, temp_pdf)
-        
-        if not success:
-            print(f"[*] Renderizando versão em PDF usando o design gráfico '{effective_template}'...")
-            rendered_html = render_html_template(json_data, effective_template)
-            html_to_pdf(rendered_html, temp_pdf)
-            if os.path.exists(rendered_html):
-                os.remove(rendered_html)
-                
-        # Remove o arquivo .docx temporário caso o usuário NÃO tenha pedido --out-docx
-        if not out_docx and os.path.exists(populated_docx):
-            os.remove(populated_docx)
-        elif out_docx and os.path.exists(populated_docx):
-            print(f"[✓] Arquivo DOCX de saída mantido a pedido do usuário em: {populated_docx}")
-    else:
-        # 3. Renderizar HTML a partir do Template escolhido se nenhum .docx for fornecido
-        rendered_html = render_html_template(json_data, effective_template)
-        html_to_pdf(rendered_html, temp_pdf)
-        if os.path.exists(rendered_html):
-            os.remove(rendered_html)
+        print(f"[✓] Arquivo DOCX populado em Python salvo em: {populated_docx}")
 
-    # 4. Injetar XML e Metadados ATS no PDF final de saída
+    # Renderiza o PDF em modo Headless direto em Python via Playwright / Chromium
+    rendered_html = render_html_template(json_data, effective_template)
+    html_to_pdf(rendered_html, temp_pdf)
+    if os.path.exists(rendered_html):
+        os.remove(rendered_html)
+
+    # 3. Injetar XML e Metadados ATS no PDF final de saída
     embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
 
     # Limpeza de PDF temporário

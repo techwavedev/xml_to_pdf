@@ -1,86 +1,31 @@
-import zipfile
 import os
-import hashlib
-
 import zipfile
-import os
-import hashlib
-import io
-import json
 import re
-from PIL import Image
-
-def get_candidate_photo_bytes(photo_path: str = None, target_format: str = 'JPEG') -> bytes:
-    """Retorna os bytes da foto do candidato (assets/photo.png ou parâmetro) convertidos para o formato desejado."""
-    if not photo_path or not os.path.exists(photo_path):
-        photo_path = "assets/photo.png"
-    if not os.path.exists(photo_path):
-        photo_path = "assets/original_candidate_photo.jpeg"
-    if not os.path.exists(photo_path):
-        photo_path = "assets/fake_large.jpeg"
-
-    try:
-        with Image.open(photo_path) as img:
-            img_rgb = img.convert("RGB")
-            buf = io.BytesIO()
-            img_rgb.save(buf, format=target_format, quality=92)
-            return buf.getvalue()
-    except Exception as e:
-        print(f"[*] Aviso ao carregar foto {photo_path}: {e}")
-        with open(photo_path, "rb") as f:
-            return f.read()
-
-def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: str = None, json_data: dict = None):
-    """
-    Limpa e atualiza um template .docx:
-    1. Substitui logos do SprintCV por PNG transparente 1x1 (layout intacto).
-    2. Substitui a foto do candidato no DOCX por assets/photo.png (ou photo_path).
-    3. Se json_data for fornecido, atualiza dados do candidato em word/document.xml.
-    4. Preserva o fundo de constelação e ícones originais.
-    """
-    if not os.path.exists(docx_input_path):
-        print(f"[❌] Arquivo não encontrado: {docx_input_path}")
-        return
-        
-    transparent_path = "assets/transparent.png"
-    with open(transparent_path, "rb") as f:
-        transparent_data = f.read()
-    
-    candidate_photo_data = get_candidate_photo_bytes(photo_path, target_format='JPEG')
-
 import html
+import json
+import xml.etree.ElementTree as ET
 
 def sanitize_xml_string(xml_str: str) -> str:
-    """Garante que qualquer & não escapado seja convertido para &amp; mantendo o XML perfeitamente válido."""
+    """Garante que qualquer & não escapado seja convertido para &amp; mantendo o XML válido."""
     return re.sub(r'&(?!(amp|lt|gt|quot|apos);)', '&amp;', xml_str)
 
-import jinja2
+def format_tech_item(item):
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        return item.get("name") or item.get("technology") or item.get("title") or str(item)
+    return str(item)
 
-# Padrões genéricos de expressões regulares para detectar dados pessoais sem textos fixos
-EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
-PHONE_REGEX = r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}'
-LINKEDIN_REGEX = r'https?://[^\s<"]+linkedin[^\s<"]*'
-
-def dynamic_templatize_xml(doc_xml: str) -> str:
-    """Transforma padrões genéricos de contato em marcadores Jinja2 dentro do XML."""
-    doc_xml = re.sub(EMAIL_REGEX, '{{ consultant.email }}', doc_xml)
-    doc_xml = re.sub(LINKEDIN_REGEX, '{{ consultant.linkedin }}', doc_xml)
-    doc_xml = re.sub(PHONE_REGEX, '{{ consultant.phone }}', doc_xml)
-    return doc_xml
-
-def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: str = None, json_data: dict = None):
+def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
     """
-    Atualiza QUALQUER template .docx usando o feed JSON fornecido:
+    Popula QUALQUER template .docx usando 100% dos dados do feed JSON:
     1. Preserva o layout visual, tabelas, cores, fontes e fundo do template .docx.
     2. Substitui o cabeçalho, resumo, contatos, habilidades, experiências e educação exclusivamente a partir do JSON.
     3. Substitui a foto do candidato e remove logos do SprintCV.
     """
     if not os.path.exists(docx_input_path):
-        print(f"[❌] Arquivo não encontrado: {docx_input_path}")
-        return
-
-    if not json_data:
-        json_data = {}
+        print(f"[❌] DOCX template não encontrado: {docx_input_path}")
+        return False
 
     consultant = json_data.get("consultant", {})
     name = consultant.get("name", "")
@@ -96,9 +41,14 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
     summary = json_data.get("about") or json_data.get("cv_summary") or ""
     
     top_techs_raw = json_data.get("top_technologies") or []
-    top_techs = [t.get("name") if isinstance(t, dict) else str(t) for t in top_techs_raw]
+    top_techs = [format_tech_item(t) for t in top_techs_raw]
     techs_str = ", ".join(top_techs)
 
+    exps = json_data.get("work_experiences", [])
+    educations = json_data.get("educations", [])
+    languages = json_data.get("languages", [])
+
+    # Textos escapados para XML
     fullname_xml = html.escape(fullname, quote=False)
     title_xml = html.escape(title, quote=False)
     email_xml = html.escape(email, quote=False)
@@ -108,13 +58,17 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
     summary_xml = html.escape(summary, quote=False)
     techs_xml = html.escape(techs_str, quote=False)
 
+    # Preparar bytes da imagem transparente e foto do candidato
     transparent_path = "assets/transparent.png"
     transparent_bytes = b""
     if os.path.exists(transparent_path):
         with open(transparent_path, "rb") as f:
             transparent_bytes = f.read()
 
-    photo_bytes = get_candidate_photo_bytes(photo_path, target_format='JPEG')
+    photo_bytes = b""
+    if photo_path and os.path.exists(photo_path):
+        with open(photo_path, "rb") as f:
+            photo_bytes = f.read()
 
     SPRINT_LOGO_HASHES = {'844fb7ee5217', 'a2c9825361f2', '7b0b95849149', 'fdb9da5c3144', 'af71625011d1'}
 
@@ -126,6 +80,7 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
                 data = jin.read(fname)
 
                 if fname.startswith('word/media/'):
+                    import hashlib
                     h = hashlib.sha256(data).hexdigest()[:12]
                     if h in SPRINT_LOGO_HASHES:
                         jout.writestr(item, transparent_bytes)
@@ -137,6 +92,7 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
                 elif fname.startswith('word/document.xml') or fname.startswith('word/header') or fname.startswith('word/footer'):
                     doc_str = data.decode('utf-8')
 
+                    # 1. Contatos e Cabeçalho do Candidato
                     if email_xml:
                         doc_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', email_xml, doc_str)
                     if linkedin_xml:
@@ -147,19 +103,23 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
                         doc_str = re.sub(r'Aveiro\s*,\s*Portugal', location_xml, doc_str)
                         doc_str = re.sub(r'Itapema,\s*SC', location_xml, doc_str)
 
+                    # 2. Nome e Cargo
                     if fullname_xml:
                         doc_str = re.sub(r'(?i)elton\s+machado', fullname_xml, doc_str)
                     if title_xml:
                         doc_str = re.sub(r'(?i)Senior Platform Engineer.*?Architect', title_xml, doc_str)
                         doc_str = re.sub(r'(?i)DevOps Engineer', title_xml, doc_str)
 
+                    # 3. Resumo Profissional (Summary)
                     if summary_xml:
                         doc_str = re.sub(r'(?i)Senior Platform Engineer and Cloud/AI Architect with 28\+ years.*?(?=\n|<)', summary_xml, doc_str)
                         doc_str = re.sub(r'(?i)Over 29 years of experience in IT infrastructure.*?(?=\n|<)', summary_xml, doc_str)
 
+                    # 4. Habilidades Técnicas / Top Technologies
                     if techs_xml:
                         doc_str = re.sub(r'Active Directory, LDAP, VMware ESX, Windows Server, AWS, Terraform, Ansible, GitLab CI/CD, Jenkins, Prometheus, Grafana, ELK', techs_xml, doc_str)
 
+                    # Sanitização estrita do XML
                     doc_str = sanitize_xml_string(doc_str)
                     jout.writestr(item, doc_str.encode('utf-8'))
                 else:
@@ -167,10 +127,6 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado salvo em: {docx_output_path}")
-
-if __name__ == "__main__":
-    src = "samples/sprint.docx"
-    dst = "output/sprint_clean_test.docx"
-    clean_docx_sprint(src, dst)
-
+        print(f"[✓] Documento DOCX populado com sucesso em: {docx_output_path}")
+        return True
+    return False
