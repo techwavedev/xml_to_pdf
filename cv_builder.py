@@ -260,7 +260,7 @@ def find_docx_file(docx_arg: str) -> str:
     return docx_arg
 
 def resolve_template_name(template_name: str, docx_template: str = None) -> str:
-    """Mapeia o arquivo .docx de entrada ou nome do template para o modelo HTML/CSS gráfico correspondente."""
+    """Mapeia o arquivo .docx de entrada para o modelo HTML caso o usuário NÃO forneça um arquivo .docx."""
     if docx_template:
         stem = Path(docx_template).stem.lower()
         for key, target_tmpl in DOCX_TO_TEMPLATE_MAP.items():
@@ -269,7 +269,7 @@ def resolve_template_name(template_name: str, docx_template: str = None) -> str:
     return template_name or "sprintcv_docx"
 
 def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", docx_template: str = None, output_pdf: str = None, out_docx: str = None):
-    """Executa o fluxo completo de forma multiplataforma: JSON / DOCX -> PDF Otimizado com HR-XML ATS."""
+    """Executa o fluxo completo: JSON / DOCX -> PDF Otimizado com HR-XML ATS."""
     if not os.path.exists(json_path):
         print(f"[❌] Arquivo JSON de entrada não encontrado: {json_path}")
         sys.exit(1)
@@ -283,7 +283,7 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
     with open(json_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
 
-    # Resolve o template gráfico com base no modelo DOCX ou parâmetro fornecido
+    # Resolve o template gráfico
     effective_template = resolve_template_name(template_name, docx_template)
 
     # Garante o carregamento de photo_b64 e bg_b64
@@ -309,15 +309,15 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés, atualiza foto/dados e converte nativamente para PDF
+    # 2. Se for especificado um arquivo .docx de entrada, USA EXCLUSIVAMENTE O FORMATO DO DOCX (SEM HTML!)
     if docx_template and os.path.exists(docx_template):
         sample_stem = Path(docx_template).stem
-        print(f"\n[*] Utilizando modelo .docx de entrada como DESIGN BASE: {docx_template}")
+        print(f"\n[*] Utilizando modelo .docx de entrada como DESIGN EXCLUSIVO: {docx_template}")
         
         # Gera o DOCX populado com o layout e formatação originais do modelo
         populated_docx = str(OUTPUT_DIR / f"{sample_stem}_{c_name}.docx")
         clean_docx_completely.clean_docx_sprint(docx_template, populated_docx, photo_path="assets/photo.png", json_data=json_data)
-        print(f"[✓] Arquivo DOCX populado com a formatação original salvo em: {populated_docx}")
+        print(f"[✓] Documento Word populado mantendo 100% da formatação original salvo em: {populated_docx}")
         
         # Converte o .docx populado para PDF com 100% de fidelidade ao layout do Word
         success = convert_docx_to_pdf_cross_platform(populated_docx, temp_pdf)
@@ -329,34 +329,31 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
             if not out_docx and os.path.exists(populated_docx):
                 os.remove(populated_docx)
             print(f"\n=======================================================")
-            print(f" 🎉 PROCESSO CONCLUÍDO COM SUCESSO! ({platform.system()})")
-            print(f" 📄 PDF de Saída (Fidelidade Word 100%): {output_pdf}")
-            print(f" 📊 Base de dados JSON: {json_path}")
+            print(f" 🎉 PDF GERADO COM 100% DE FIDELIDADE AO MODELO DOCX! ({platform.system()})")
+            print(f" 📄 PDF de Saída (Layout do Word): {output_pdf}")
             print(f" 🎨 Modelo .docx utilizado: {docx_template}")
             print(f"=======================================================\n")
             return
         else:
-            print(f"\n[⚠️] O MS Word não está em execução ou o LibreOffice não foi encontrado no seu sistema.")
-            print(f"     📄 O arquivo .docx populado mantendo 100% da formatação e design original foi salvo em:")
+            print(f"\n[❌] Erro: Não foi possível converter o arquivo .docx nativamente para PDF.")
+            print(f"     O seu arquivo Word populado com a formatação EXATA do modelo foi salvo em:")
             print(f"        -> {populated_docx}")
-            print(f"     💡 Para converter seu modelo .docx diretamente para PDF no Mac:")
-            print(f"        1. Certifique-se de que o Microsoft Word está aberto, ou")
-            print(f"        2. Instale o LibreOffice via Terminal: brew install --cask libreoffice")
-            print(f"     [*] Renderizando versão visual alternativa via HTML/CSS...")
-            
-            rendered_html = render_html_template(json_data, effective_template)
-            html_to_pdf(rendered_html, temp_pdf)
-            if os.path.exists(rendered_html):
-                os.remove(rendered_html)
+            print(f"     Para gerar o PDF com a formatação exata do Word no macOS:")
+            print(f"     1. Abra o aplicativo 'Microsoft Word' no seu Mac, e")
+            print(f"     2. Re-execute o seu comando python no Terminal.")
+            sys.exit(1)
     else:
-        # 3. Renderizar HTML a partir do Template escolhido se não for fornecido arquivo .docx
+        # 3. Renderizar HTML a partir do Template escolhido se NENHUM arquivo .docx for fornecido
         rendered_html = render_html_template(json_data, effective_template)
         html_to_pdf(rendered_html, temp_pdf)
         if os.path.exists(rendered_html):
             os.remove(rendered_html)
+        embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
+        if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
 
     # 4. Injetar XML e Metadados ATS no PDF final de saída
-    embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
+    # (Removido daqui pois já processado dentro dos blocos if/else acima)
 
     # Limpeza de arquivos temporários
     if os.path.exists(temp_pdf):
