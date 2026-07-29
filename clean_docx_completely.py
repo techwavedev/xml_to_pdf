@@ -1,16 +1,36 @@
 import zipfile
-import xml.etree.ElementTree as ET
 import os
+import hashlib
 
 def clean_docx_footers(docx_input_path: str, docx_output_path: str):
     """
-    Remove apenas o logo do SprintCV do rodapé, preservando 100% dos cabeçalhos,
-    imagem de fundo de constelação, foto do candidato e formatação original do .docx.
+    Substitui logos do SprintCV por uma imagem transparente (1x1) e 
+    substitui a foto do candidato por um Avatar Genérico.
+    Não altera NENHUM arquivo XML, garantindo 100% de preservação do layout!
     """
     if not os.path.exists(docx_input_path):
         print(f"[❌] Arquivo de entrada não encontrado: {docx_input_path}")
         return
         
+    generic_avatar_path = "assets/fake_photo.jpeg"
+    if not os.path.exists(generic_avatar_path):
+        generic_avatar_path = "assets/sample_photo.jpeg"
+        
+    transparent_path = "assets/transparent.png"
+    with open(transparent_path, "rb") as f:
+        transparent_data = f.read()
+
+    with open(generic_avatar_path, "rb") as f:
+        generic_avatar_data = f.read()
+        
+    # Hashes SHA-256 conhecidos das logos do SprintCV inseridas nos templates
+    SPRINT_LOGO_HASHES = {
+        '844fb7ee5217', # 1592 bytes (Logo principal)
+        'a2c9825361f2', # 238 bytes (Variante watermark)
+        '7b0b95849149', # 286 bytes (Variante pequena)
+        'fdb9da5c3144'  # 437 bytes (Variante)
+    }
+
     temp_zip = docx_output_path + ".tmp"
     with zipfile.ZipFile(docx_input_path, 'r') as jin:
         with zipfile.ZipFile(temp_zip, 'w') as jout:
@@ -18,33 +38,30 @@ def clean_docx_footers(docx_input_path: str, docx_output_path: str):
                 fname = item.filename
                 data = jin.read(fname)
 
-                # Se for um arquivo de rodapé, removemos apenas as marcas de desenho do logo do SprintCV
-                if 'footer' in fname.lower() and fname.endswith('.xml'):
-                    try:
-                        # Se contiver a imagem do logo SprintCV no footer, zera apenas esse footer
-                        if b'image3' in data or b'image4' in data or b'image1' in data or b'image2' in data or b'image5' in data or b'sprint' in data.lower():
-                            empty_footer = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
-                            jout.writestr(fname, empty_footer)
-                            print(f"[✓] Logo removida do rodapé: {fname}")
-                        else:
-                            jout.writestr(fname, data)
-                    except Exception:
-                        jout.writestr(fname, data)
-
-                # Remove apenas as imagens da logo do SprintCV em media/ (mantém foto e fundo)
-                elif fname in ['word/media/image1.png', 'word/media/image2.png', 'word/media/image3.png', 'word/media/image4.png', 'word/media/image5.png']:
-                    print(f"[🗑️] Logo SprintCV removida dos media: {fname}")
-                    continue
-
+                if fname.startswith('word/media/'):
+                    h = hashlib.sha256(data).hexdigest()[:12]
+                    
+                    # Se for uma logo identificada do SprintCV, substitui por PNG Transparente 1x1
+                    if h in SPRINT_LOGO_HASHES:
+                        jout.writestr(item, transparent_data)
+                        print(f"[🗑️] Logo SprintCV ({fname}) tornada invisível!")
+                    
+                    # Se for a foto JPEG do candidato, substitui pelo Avatar Falso
+                    elif fname.endswith('.jpeg') or fname.endswith('.jpg'):
+                        jout.writestr(item, generic_avatar_data)
+                        print(f"[🛡️] Foto pessoal ({fname}) substituída pelo Avatar Genérico de Exemplo!")
+                        
+                    else:
+                        jout.writestr(item, data) # Mantém fundos e outros ícones intactos
                 else:
-                    # PRESERVA TODOS os outros arquivos (header1.xml com foto/fundo, document.xml, etc.) 100% INTACTOS
+                    # Todos os XMLs (rodapés, cabeçalhos, design) são mantidos 100% INTACTOS
                     jout.writestr(item, data)
                 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[🎉] Arquivo .docx preservado com foto/fundo e sem logo no rodapé: {docx_output_path}")
+        print(f"[🎉] Arquivo .docx blindado com sucesso: Layout 100% original, mas sem logos e sem foto pessoal!")
 
 if __name__ == "__main__":
-    src = "Samples/Sprint CV Elton Machado 20260729 085709.docx"
+    src = "Samples/modern.docx"
     dst = "Samples/template_clean.docx"
     clean_docx_footers(src, dst)

@@ -25,7 +25,7 @@ Sistema completo em Python para gerar Currículos/CVs em PDF estilizados a parti
 Para utilizar o seu arquivo `.docx` original (na pasta `Samples/`) como modelo de entrada para gerar um **PDF de saída**:
 
 ```bash
-python3 cv_builder.py --json sample_cv.json --docx "Samples/Sprint CV Elton Machado 20260729 085709.docx"
+python3 cv_builder.py --json sample_cv.json --docx "Samples/modern.docx"
 ```
 
 > **Resultado de Saída**: O arquivo final gerado em `output/` será um arquivo PDF (`.pdf`), limpo e com metadados ATS HR-XML incorporados!
