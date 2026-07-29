@@ -8,15 +8,10 @@ e Incorporação Automática de Metadados ATS XML.
 Fluxo:
  1. Carrega os dados do CV em formato JSON (base única de dados).
  2. Converte automaticamente o JSON para HR-XML (padrão internacional ATS).
- 3. Renderiza o CV no template gráfico escolhido (modern, classic, tech_dark, etc.).
- 4. Converte o HTML em PDF com renderização gráfica profissional.
+ 3. Renderiza o CV no template gráfico escolhido (sprintcv_docx, modern, classic, etc.).
+ 4. Converte o HTML em PDF via Playwright (Chromium) garantindo 100% de fidelidade gráfica.
  5. Injeta o XML gerado no PDF (anexo, metadados XMP e dicionário /Info).
  6. Salva o PDF otimizado para ATS na pasta output/.
-
-Uso:
-  python3 cv_builder.py --json sample_cv.json --template modern
-  python3 cv_builder.py --json sample_cv.json --template classic
-  python3 cv_builder.py --json sample_cv.json --template tech_dark --out output/meu_cv_tech.pdf
 -------------------------------------------------------------------------
 """
 
@@ -39,7 +34,6 @@ def render_html_template(json_data: dict, template_name: str) -> str:
     """Renderiza os dados JSON em um arquivo HTML usando Jinja2."""
     template_file = TEMPLATES_DIR / f"{template_name}.html"
     if not template_file.exists():
-        # Se for um caminho direto para um arquivo html customizado
         template_file = Path(template_name)
         if not template_file.exists():
             print(f"[❌] Template '{template_name}' não encontrado na pasta templates/ ou no caminho especificado.")
@@ -47,6 +41,20 @@ def render_html_template(json_data: dict, template_name: str) -> str:
 
     with open(template_file, 'r', encoding='utf-8') as f:
         template_content = f.read()
+
+    # Carrega assets de imagem base64 (fundo, foto, logo) se disponíveis
+    if os.path.exists("assets/b64_assets.json"):
+        try:
+            with open("assets/b64_assets.json", "r") as f_b64:
+                b64_data = json.load(f_b64)
+                if "bg_b64" not in json_data or not json_data["bg_b64"]:
+                    json_data["bg_b64"] = b64_data.get("bg", "")
+                if "photo_b64" not in json_data or not json_data["photo_b64"]:
+                    json_data["photo_b64"] = b64_data.get("photo", "")
+                if "logo_b64" not in json_data or not json_data["logo_b64"]:
+                    json_data["logo_b64"] = b64_data.get("logo", "")
+        except Exception:
+            pass
 
     jinja_template = Template(template_content)
     rendered_html = jinja_template.render(**json_data)
@@ -60,32 +68,56 @@ def render_html_template(json_data: dict, template_name: str) -> str:
     return str(temp_html_path)
 
 def html_to_pdf(html_path: str, temp_pdf_path: str) -> str:
-    """Converte arquivo HTML para PDF via Google Chrome Headless ou fallback."""
+    """Converte arquivo HTML para PDF via Playwright (Chromium) ou fallback."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+    abs_html_path = os.path.abspath(html_path)
+    abs_html_url = f"file://{abs_html_path}"
+
+    # 1. Tenta Playwright (Fidelidade Gráfica de 100%)
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(abs_html_url, wait_until="networkidle")
+            page.pdf(
+                path=temp_pdf_path,
+                format="A4",
+                print_background=True,
+                margin={"top": "0mm", "bottom": "0mm", "left": "0mm", "right": "0mm"}
+            )
+            browser.close()
+        print(f"[✓] PDF gráfico renderizado com fidelidade de 100% via Playwright (Chromium): {temp_pdf_path}")
+        return temp_pdf_path
+    except Exception as e_pw:
+        print(f"[*] Playwright não disponível/falhou: {e_pw}. Tentando Google Chrome...")
+
+    # 2. Fallback Google Chrome Headless
     if os.path.exists(CHROME_PATH):
         cmd = [
             CHROME_PATH,
-            "--headless",
+            "--headless=new",
+            "--no-sandbox",
+            "--user-data-dir=/tmp/chrome_pdf_user_dir",
             "--disable-gpu",
             "--no-pdf-header-footer",
             f"--print-to-pdf={temp_pdf_path}",
-            html_path
+            abs_html_url
         ]
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print(f"[✓] PDF gráfico renderizado via Google Chrome Headless: {temp_pdf_path}")
             return temp_pdf_path
-        except Exception as e:
-            print(f"[*] Aviso ao executar Chrome Headless: {e}")
-            
-    # Fallback caso o Chrome não consiga imprimir: utiliza script nativo generate_sample_pdf
+        except Exception as e_chrome:
+            print(f"[*] Aviso ao executar Chrome Headless: {e_chrome}")
+
+    # 3. Fallback Simples
     print("[*] Utilizando gerador PDF de fallback...")
     import generate_sample_pdf
     generate_sample_pdf.create_simple_pdf(temp_pdf_path)
     return temp_pdf_path
 
-def build_cv_from_json(json_path: str, template_name: str = "modern", output_pdf: str = None):
+def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", output_pdf: str = None):
     """Executa o fluxo completo: JSON -> HR-XML + HTML PDF -> PDF Otimizado com XML ATS."""
     if not os.path.exists(json_path):
         print(f"[❌] Arquivo JSON de entrada não encontrado: {json_path}")
@@ -107,7 +139,7 @@ def build_cv_from_json(json_path: str, template_name: str = "modern", output_pdf
     # 2. Renderizar HTML a partir do Template escolhido
     rendered_html = render_html_template(json_data, template_name)
 
-    # 3. Converter HTML em PDF
+    # 3. Converter HTML em PDF via Playwright Chromium
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
     html_to_pdf(rendered_html, temp_pdf)
 
@@ -138,7 +170,7 @@ def list_templates():
 def main():
     parser = argparse.ArgumentParser(description="Gerador de CVs PDF a partir de JSON com múltiplos templates gráficos e ATS XML.")
     parser.add_argument("--json", default="sample_cv.json", help="Caminho do arquivo JSON contendo a base do currículo (padrão: sample_cv.json)")
-    parser.add_argument("--template", default="modern", help="Nome do template gráfico (modern, classic, tech_dark) ou caminho do arquivo HTML (padrão: modern)")
+    parser.add_argument("--template", default="sprintcv_docx", help="Nome do template gráfico (sprintcv_docx, modern, classic, tech_dark) (padrão: sprintcv_docx)")
     parser.add_argument("--out", default=None, help="Caminho do PDF de saída (padrão: output/<nome>_<template>_ats.pdf)")
     parser.add_argument("--list-templates", action="store_true", help="Lista os templates gráficos disponíveis.")
 

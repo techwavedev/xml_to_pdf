@@ -82,7 +82,7 @@
             font-weight: bold;
             color: #a0aec0;
         }
-        .lang-list, .skill-list {
+        .lang-list {
             list-style: none;
         }
         .lang-item {
@@ -124,7 +124,35 @@
             white-space: pre-line;
             margin-bottom: 10px;
         }
-        .accomplishment-item, .edu-item, .training-item {
+
+        /* Work Experience Styling */
+        .exp-card {
+            margin-bottom: 16px;
+        }
+        .exp-header {
+            font-weight: bold;
+            font-size: 13.5px;
+            color: #2c5282;
+        }
+        .exp-sub {
+            font-size: 12px;
+            color: #718096;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .exp-desc {
+            color: #4a5568;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .exp-tasks {
+            margin-left: 16px;
+            font-size: 12px;
+            color: #4a5568;
+            margin-bottom: 4px;
+        }
+
+        .edu-item, .training-item {
             margin-bottom: 10px;
             color: #2d3748;
             font-size: 12px;
@@ -137,20 +165,6 @@
         .edu-institution {
             color: #718096;
             font-style: italic;
-        }
-        .skills-tag-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .skill-tag {
-            background: #edf2f7;
-            color: #2d3748;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-            border: 1px solid #e2e8f0;
         }
     </style>
 </head>
@@ -225,6 +239,32 @@
             <div class="main-section">
                 <div class="section-title">{{ cv_labels.summary or "Professional Summary" }}</div>
                 <div class="summary-text">{{ cv_summary }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Experiência Profissional (Job Experience) -->
+            {% if work_experiences %}
+            <div class="main-section">
+                <div class="section-title">{{ cv_labels.professional_experience or "Work Experience" }}</div>
+                {% for exp in work_experiences %}
+                <div class="exp-card">
+                    <div class="exp-header">{{ exp.title }}</div>
+                    <div class="exp-sub">{{ exp.company }}{% if exp.location %} - {{ exp.location }}{% endif %} | {{ exp.period }}</div>
+                    {% if exp.description %}
+                    <div class="exp-desc">{{ exp.description }}</div>
+                    {% endif %}
+                    {% if exp.responsibilities %}
+                    <ul class="exp-tasks">
+                        {% for task in exp.responsibilities %}
+                        <li>{{ task }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if exp.technologies %}
+                    <div style="font-size: 11px; color: #718096; margin-top: 3px;"><strong>Technologies:</strong> {{ exp.technologies | join(', ') }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
             {% endif %}
 

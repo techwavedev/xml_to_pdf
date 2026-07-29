@@ -7,6 +7,11 @@ __pycache__/
 env/
 venv/
 
+# Pastas de dados pessoais e amostras do usuário (não sincronizadas no Git)
+Samples/
+samples/
+personal/
+
 # Pasta de saída dos CVs gerados em PDF/XML (apenas .gitkeep é mantido)
 output/*
 !output/.gitkeep

@@ -46,10 +46,51 @@
     "linkedin": "https://linkedin.com/in/johndoe",
     "birthdate": "1990-01-01"
   },
+  "present_job_title": "Senior DevOps & Cloud Specialist",
   "about": "Senior DevOps & Cloud Solutions Engineer with 10+ years of experience in cloud infrastructure, CI/CD automation, Kubernetes orchestration, and system reliability engineering.",
   "cv_summary": "- Over 10 years of experience in cloud infrastructure and enterprise DevOps engineering.\n- Extensive expertise in AWS and GCP cloud platforms, Terraform IaC, and Kubernetes orchestration.\n- Strong background in building CI/CD pipelines using GitHub Actions, GitLab CI, and Jenkins.\n- Skilled in monitoring and observability stacks (Prometheus, Grafana, ELK).",
   "technical_skills": "DevOps, Cloud Infrastructure, AWS, GCP, Azure, Terraform, Ansible, Docker, Kubernetes, Helm, GitLab CI, GitHub Actions, Jenkins, Prometheus, Grafana, Python, Bash, Go, PostgreSQL, Redis, Linux Administration.",
   "relevant_accomplishments": "• Architected high-availability cloud infrastructure on AWS reducing downtime by 99.99%.\n• Automated multi-region Kubernetes deployments cutting deployment times from hours to minutes.\n• Implemented FinOps cloud cost optimization strategies reducing annual infrastructure spend by 30%.",
+  "work_experiences": [
+    {
+      "title": "Lead DevOps & Cloud Engineer",
+      "company": "Cloud Scale Solutions Inc.",
+      "period": "01/2022 - Present",
+      "location": "San Francisco, USA",
+      "description": "Led the cloud architecture and automation efforts for enterprise multi-cloud platforms processing over 20M requests daily.",
+      "responsibilities": [
+        "Architected reusable Infrastructure as Code modules using Terraform and Ansible for AWS EKS deployment.",
+        "Constructed automated CI/CD pipelines in GitLab CI and GitHub Actions, cutting release deployment cycle times by 65%.",
+        "Configured unified observability stacks with Prometheus, Grafana, and OpenTelemetry across microservices."
+      ],
+      "technologies": ["AWS", "Kubernetes", "Terraform", "GitLab CI", "Prometheus", "Grafana", "Python", "Docker"]
+    },
+    {
+      "title": "Senior Infrastructure Specialist",
+      "company": "Global FinTech Systems",
+      "period": "06/2018 - 12/2021",
+      "location": "New York, USA",
+      "description": "Managed cloud migrations, security remediation, and high-availability operations for financial services applications.",
+      "responsibilities": [
+        "Orchestrated the zero-downtime migration of 80+ enterprise applications to AWS cloud infrastructure.",
+        "Automated patch management and compliance hardening across 300+ Linux servers using Ansible and Python.",
+        "Designed disaster recovery and backup automation routines achieving RTO under 15 minutes."
+      ],
+      "technologies": ["AWS", "Terraform", "Ansible", "Linux", "Jenkins", "PostgreSQL", "Redis", "Bash"]
+    },
+    {
+      "title": "Systems Engineer & DevOps Specialist",
+      "company": "Enterprise Tech Labs",
+      "period": "03/2014 - 05/2018",
+      "location": "Austin, USA",
+      "description": "Provided 3rd-line infrastructure support, virtualization management, and deployment automation.",
+      "responsibilities": [
+        "Managed VMware ESXi virtualization cluster and Docker container environments.",
+        "Built automated log aggregation and monitoring dashboards using ELK stack and Nagios."
+      ],
+      "technologies": ["Linux", "VMware ESXi", "Docker", "ELK Stack", "Nagios", "Python", "MySQL"]
+    }
+  ],
   "social_skills": "Strong leadership, communication skills, collaborative mindset, experience working with international cross-functional teams.",
   "organisational_skills": "Excellent project coordination, incident management, agile methodologies, high adaptability under fast-paced environments.",
   "hobbies": "Open-source contributing, hiking, photography, cycling.",

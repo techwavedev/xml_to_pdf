@@ -59,7 +59,6 @@ def convert_json_to_xml(json_data: dict) -> str:
     tech_skills_raw = json_data.get("technical_skills", "")
     if tech_skills_raw:
         core_competencies = ET.SubElement(struct_resume, "CoreCompetencies")
-        # Divide habilidades por ponto e vírgula, vírgula ou parênteses
         skills_list = [s.strip() for s in tech_skills_raw.replace(';', ',').split(',') if s.strip()]
         for skill_item in skills_list[:50]:
             skill_elem = ET.SubElement(core_competencies, "Skill")
@@ -71,7 +70,27 @@ def convert_json_to_xml(json_data: dict) -> str:
         acc_elem = ET.SubElement(struct_resume, "KeyAchievements")
         acc_elem.text = accomplishments.strip()
 
-    # 5. Formação Acadêmica
+    # 5. Experiência Profissional (EmploymentHistory)
+    work_experiences = json_data.get("work_experiences", [])
+    if work_experiences:
+        emp_history = ET.SubElement(struct_resume, "EmploymentHistory")
+        for exp in work_experiences:
+            emp_org = ET.SubElement(emp_history, "EmployerOrg")
+            if exp.get("company"):
+                emp_name = ET.SubElement(emp_org, "EmployerOrgName")
+                emp_name.text = exp.get("company")
+            pos_hist = ET.SubElement(emp_org, "PositionHistory")
+            if exp.get("title"):
+                title_elem = ET.SubElement(pos_hist, "Title")
+                title_elem.text = exp.get("title")
+            if exp.get("period"):
+                period_elem = ET.SubElement(pos_hist, "Period")
+                period_elem.text = exp.get("period")
+            if exp.get("description"):
+                desc_elem = ET.SubElement(pos_hist, "Description")
+                desc_elem.text = exp.get("description")
+
+    # 6. Formação Acadêmica
     educations = json_data.get("educations", [])
     if educations:
         edu_history = ET.SubElement(struct_resume, "EducationHistory")
@@ -86,11 +105,8 @@ def convert_json_to_xml(json_data: dict) -> str:
             if edu.get("course_end_date_year"):
                 comp = ET.SubElement(edu_org, "CompletionDate")
                 comp.text = str(edu.get("course_end_date_year"))
-            if edu.get("course_description"):
-                desc = ET.SubElement(edu_org, "Description")
-                desc.text = edu.get("course_description")
 
-    # 6. Idiomas
+    # 7. Idiomas
     mother_langs = json_data.get("mother_languages", [])
     other_langs = json_data.get("other_languages", [])
     all_langs = mother_langs + other_langs
@@ -104,7 +120,7 @@ def convert_json_to_xml(json_data: dict) -> str:
                 prof_node = ET.SubElement(lang_node, "Proficiency")
                 prof_node.text = f"Written: {lang.get('written_label')}, Spoken: {lang.get('spoken_label', '')}"
 
-    # 7. Treinamentos e Certificações
+    # 8. Treinamentos e Certificações
     trainings = json_data.get("trainings", [])
     if trainings:
         cert_elem = ET.SubElement(struct_resume, "Certifications")
@@ -112,7 +128,6 @@ def convert_json_to_xml(json_data: dict) -> str:
             cert_node = ET.SubElement(cert_elem, "Certification")
             cert_node.text = f"{tr.get('name', '')} ({tr.get('company', '')} - {tr.get('year', '')})".strip(" ()-")
 
-    # Retorna XML formatado com indentação limpa
     raw_str = ET.tostring(root, encoding="utf-8")
     parsed = minidom.parseString(raw_str)
     return parsed.toprettyxml(indent="  ")
