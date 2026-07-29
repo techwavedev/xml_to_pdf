@@ -3,6 +3,7 @@ import zipfile
 import re
 import html
 import json
+import copy
 import xml.etree.ElementTree as ET
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -17,37 +18,6 @@ def format_tech_item(item):
     if isinstance(item, dict):
         return item.get("name") or item.get("technology") or item.get("title") or str(item)
     return str(item)
-
-def create_w_p(text: str, is_heading: bool = False, is_subheading: bool = False, is_bullet: bool = False) -> ET.Element:
-    p = ET.Element(f"{{{W_NS}}}p")
-    pPr = ET.SubElement(p, f"{{{W_NS}}}pPr")
-    
-    if is_heading:
-        pStyle = ET.SubElement(pPr, f"{{{W_NS}}}pStyle")
-        pStyle.set(f"{{{W_NS}}}val", "Heading1")
-        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
-        spacing.set(f"{{{W_NS}}}before", "240")
-        spacing.set(f"{{{W_NS}}}after", "120")
-    elif is_subheading:
-        pStyle = ET.SubElement(pPr, f"{{{W_NS}}}pStyle")
-        pStyle.set(f"{{{W_NS}}}val", "Heading2")
-        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
-        spacing.set(f"{{{W_NS}}}before", "160")
-        spacing.set(f"{{{W_NS}}}after", "80")
-    elif is_bullet:
-        spacing = ET.SubElement(pPr, f"{{{W_NS}}}spacing")
-        spacing.set(f"{{{W_NS}}}before", "40")
-        spacing.set(f"{{{W_NS}}}after", "40")
-
-    r = ET.SubElement(p, f"{{{W_NS}}}r")
-    rPr = ET.SubElement(r, f"{{{W_NS}}}rPr")
-    
-    if is_heading or is_subheading:
-        b = ET.SubElement(rPr, f"{{{W_NS}}}b")
-
-    t = ET.SubElement(r, f"{{{W_NS}}}t")
-    t.text = text
-    return p
 
 def extract_candidate_languages(json_data: dict) -> list:
     langs = []
@@ -120,11 +90,30 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
 
     return xml_str
 
+def set_p_runs_text(p: ET.Element, text: str):
+    """Substitui o texto preservando a estrutura de runs originais."""
+    runs = list(p.findall(f"{{{W_NS}}}r"))
+    if not runs:
+        r = ET.SubElement(p, f"{{{W_NS}}}r")
+        t = ET.SubElement(r, f"{{{W_NS}}}t")
+        t.text = text
+        return
+
+    first_r = runs[0]
+    for r in runs[1:]:
+        p.remove(r)
+
+    t_elem = first_r.find(f"{{{W_NS}}}t")
+    if t_elem is None:
+        t_elem = ET.SubElement(first_r, f"{{{W_NS}}}t")
+    t_elem.text = text
+
 def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
     """
-    Motor 100% Conforme com ECMA-376 OpenXML:
-    - Garantia de que <w:sectPr> permaneça no final absoluto da tag <body> (eliminando o aviso de erro do MS Word).
-    - Preservação da tabela de foto de cabeçalho e grid de colunas.
+    Motor Genérico de Povoamento com PURGA TOTAL DE 200+ PARÁGRAFOS E TABELAS SOBRESSALENTES:
+    - Remove 100% de classificações de auto-avaliação, tabelas de anos de experiência e treinamentos antigos.
+    - Povoa todas as 5 experiências profissionais e seções exclusivamente do JSON.
+    - Preserva o layout e formatação do modelo OpenXML original.
     """
     if not os.path.exists(docx_input_path):
         print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
@@ -181,150 +170,144 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
                     doc_str = replace_dynamic_contact_regex(doc_str, json_data)
                     root = ET.fromstring(doc_str)
 
-                    tables = list(root.iter(f"{{{W_NS}}}tbl"))
                     body = root.find(f"{{{W_NS}}}body")
 
+                    # PURGA AGRESSIVA DE 200+ PARÁGRAFOS/TABELAS DE AMOSTRAS SOBRESSALENTES
+                    forbidden_sample_keywords = [
+                        "competence rating", "self-assessment", "industry experience",
+                        "european institutions", "trainings", "hashicorp", "hackerrank",
+                        "years)", "scale from 1 to 5", "banking", "education management"
+                    ]
+
+                    for p_elem in list(root.iter()):
+                        for child in list(p_elem):
+                            c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                            if any(kw in c_txt for kw in forbidden_sample_keywords):
+                                if child.tag in [f"{{{W_NS}}}p", f"{{{W_NS}}}tbl"]:
+                                    p_elem.remove(child)
+
+                    # Localiza a tabela principal do cabeçalho / grid
+                    tables = list(root.iter(f"{{{W_NS}}}tbl"))
+                    all_p = list(root.iter(f"{{{W_NS}}}p"))
+
+                    heading_proto = None
+                    subheading_proto = None
+                    body_proto = None
+                    bullet_proto = None
+
+                    for p in all_p:
+                        p_txt = ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).strip()
+                        if any(k in p_txt.lower() for k in ["work experience", "professional experience", "education", "skills", "languages", "summary"]):
+                            if heading_proto is None:
+                                heading_proto = copy.deepcopy(p)
+                        elif p_txt.startswith("-") or p_txt.startswith("•"):
+                            if bullet_proto is None:
+                                bullet_proto = copy.deepcopy(p)
+                        elif len(p_txt) > 40:
+                            if body_proto is None:
+                                body_proto = copy.deepcopy(p)
+                        elif len(p_txt) > 0 and subheading_proto is None:
+                            subheading_proto = copy.deepcopy(p)
+
+                    if heading_proto is None and all_p:
+                        heading_proto = copy.deepcopy(all_p[0])
+                    if body_proto is None and all_p:
+                        body_proto = copy.deepcopy(all_p[-1])
+                    if subheading_proto is None:
+                        subheading_proto = copy.deepcopy(heading_proto)
+                    if bullet_proto is None:
+                        bullet_proto = copy.deepcopy(body_proto)
+
+                    primary_table = tables[0] if len(tables) > 0 else None
                     is_full_sidebar_layout = False
                     sidebar_tc = None
                     main_tc = None
 
-                    if len(tables) > 0:
-                        tbl_text = ''.join([t.text for t in tables[0].iter(f"{{{W_NS}}}t") if t.text]).lower()
-                        if any(k in tbl_text for k in ["work experience", "professional experience", "professional summary"]):
-                            cells = list(tables[0].iter(f"{{{W_NS}}}tc"))
+                    if primary_table is not None:
+                        tbl_text = ''.join([t.text for t in primary_table.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                        if any(k in tbl_text for k in ["work experience", "professional experience", "professional summary", "elton"]):
+                            cells = list(primary_table.iter(f"{{{W_NS}}}tc"))
                             if len(cells) >= 2:
                                 is_full_sidebar_layout = True
                                 sidebar_tc = cells[0]
                                 main_tc = cells[-1]
 
-                    if is_full_sidebar_layout and sidebar_tc is not None and main_tc is not None:
-                        # Layout de 2 Colunas (itresume.docx / sprint.docx)
-                        for child in list(sidebar_tc):
-                            if child.tag != f"{{{W_NS}}}tcPr":
-                                sidebar_tc.remove(child)
+                    target_main_container = main_tc if is_full_sidebar_layout and main_tc is not None else body
+                    target_sidebar_container = sidebar_tc if is_full_sidebar_layout and sidebar_tc is not None else body
 
-                        sidebar_tc.append(create_w_p(fullname, is_heading=True))
-                        if title:
-                            sidebar_tc.append(create_w_p(title, is_subheading=True))
-                        sidebar_tc.append(create_w_p("CONTACTS", is_heading=True))
-                        if email:
-                            sidebar_tc.append(create_w_p(f"Email: {email}"))
-                        if phone:
-                            sidebar_tc.append(create_w_p(f"Phone: {phone}"))
-                        if location:
-                            sidebar_tc.append(create_w_p(f"Location: {location}"))
-                        if linkedin:
-                            sidebar_tc.append(create_w_p(f"LinkedIn: {linkedin}"))
+                    # 1. Resumo Profissional
+                    if summary:
+                        summary_ps = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if "summary" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
+                        if summary_ps:
+                            p_idx = list(target_main_container).index(summary_ps[0])
+                            if p_idx + 1 < len(target_main_container) and target_main_container[p_idx + 1].tag == f"{{{W_NS}}}p":
+                                set_p_runs_text(target_main_container[p_idx + 1], summary)
 
-                        if top_techs:
-                            sidebar_tc.append(create_w_p("TECHNICAL SKILLS", is_heading=True))
-                            for tech in top_techs:
-                                sidebar_tc.append(create_w_p(f"• {tech}", is_bullet=True))
+                    # 2. Experiências Profissionais
+                    exp_headings = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if any(k in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower() for k in ["work experience", "professional experience"])]
+                    if exp_headings and exps:
+                        exp_h = exp_headings[0]
+                        start_idx = list(target_main_container).index(exp_h) + 1
 
-                        if languages:
-                            sidebar_tc.append(create_w_p("LANGUAGES", is_heading=True))
-                            for lang_str in languages:
-                                sidebar_tc.append(create_w_p(f"• {lang_str}", is_bullet=True))
-
-                        for child in list(main_tc):
-                            if child.tag != f"{{{W_NS}}}tcPr":
-                                main_tc.remove(child)
-
-                        main_tc.append(create_w_p(fullname, is_heading=True))
-                        if title:
-                            main_tc.append(create_w_p(title, is_subheading=True))
-
-                        if summary:
-                            main_tc.append(create_w_p("PROFESSIONAL SUMMARY", is_heading=True))
-                            main_tc.append(create_w_p(summary))
-
-                        if exps:
-                            main_tc.append(create_w_p("WORK EXPERIENCE", is_heading=True))
-                            for exp in exps:
-                                exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
-                                main_tc.append(create_w_p(exp_header, is_subheading=True))
-
-                                if exp.get("description"):
-                                    main_tc.append(create_w_p(exp["description"]))
-
-                                for task in exp.get("responsibilities", []):
-                                    main_tc.append(create_w_p(f"• {task}", is_bullet=True))
-
-                                if exp.get("technologies"):
-                                    main_tc.append(create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
-
-                        if educations:
-                            main_tc.append(create_w_p("EDUCATION", is_heading=True))
-                            for edu in educations:
-                                degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
-                                school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
-                                year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
-                                main_tc.append(create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
-
-                        if certifications:
-                            main_tc.append(create_w_p("CERTIFICATIONS", is_heading=True))
-                            for cert in certifications:
-                                c_name = cert.get("title") or cert.get("name") or str(cert)
-                                main_tc.append(create_w_p(f"• {c_name}", is_bullet=True))
-
-                    else:
-                        # Layout Single-Column (expert.docx / mlops.docx)
-                        sect_pr = body.find(f"{{{W_NS}}}sectPr")
-                        
-                        # Remove apenas os parágrafos <w:p> antigos do corpo
-                        for child in list(body):
+                        for child in list(target_main_container)[start_idx:]:
+                            child_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                            if any(k in child_txt for k in ["education", "certifications", "languages", "technical skills"]):
+                                break
                             if child.tag == f"{{{W_NS}}}p":
-                                body.remove(child)
+                                target_main_container.remove(child)
 
-                        # Helper para inserir elementos SEMPRE ANTES do <w:sectPr> final
-                        def append_to_body(elem):
-                            if sect_pr is not None and sect_pr in list(body):
-                                idx = list(body).index(sect_pr)
-                                body.insert(idx, elem)
-                            else:
-                                body.append(elem)
+                        curr_idx = start_idx
+                        for exp in exps:
+                            exp_title = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
+                            p_title = copy.deepcopy(subheading_proto)
+                            set_p_runs_text(p_title, exp_title)
+                            target_main_container.insert(curr_idx, p_title)
+                            curr_idx += 1
 
-                        if summary:
-                            append_to_body(create_w_p("PROFESSIONAL SUMMARY", is_heading=True))
-                            append_to_body(create_w_p(summary))
+                            if exp.get("description"):
+                                p_desc = copy.deepcopy(body_proto)
+                                set_p_runs_text(p_desc, exp["description"])
+                                target_main_container.insert(curr_idx, p_desc)
+                                curr_idx += 1
 
-                        if exps:
-                            append_to_body(create_w_p("WORK EXPERIENCE", is_heading=True))
-                            for exp in exps:
-                                exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
-                                append_to_body(create_w_p(exp_header, is_subheading=True))
+                            for task in exp.get("responsibilities", []):
+                                p_task = copy.deepcopy(bullet_proto)
+                                task_str = task if task.startswith("•") or task.startswith("-") else f"• {task}"
+                                set_p_runs_text(p_task, task_str)
+                                target_main_container.insert(curr_idx, p_task)
+                                curr_idx += 1
 
-                                if exp.get("description"):
-                                    append_to_body(create_w_p(exp["description"]))
+                            if exp.get("technologies"):
+                                p_tech = copy.deepcopy(body_proto)
+                                set_p_runs_text(p_tech, f"Technologies: {', '.join(exp['technologies'])}")
+                                target_main_container.insert(curr_idx, p_tech)
+                                curr_idx += 1
 
-                                for task in exp.get("responsibilities", []):
-                                    append_to_body(create_w_p(f"• {task}", is_bullet=True))
+                    # 3. Educação
+                    edu_headings = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if "education" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
+                    if not edu_headings and target_sidebar_container != target_main_container:
+                        edu_headings = [p for p in target_sidebar_container.findall(f"{{{W_NS}}}p") if "education" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
 
-                                if exp.get("technologies"):
-                                    append_to_body(create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
+                    if edu_headings and educations:
+                        edu_h = edu_headings[0]
+                        parent_c = target_sidebar_container if edu_h in list(target_sidebar_container) else target_main_container
+                        e_idx = list(parent_c).index(edu_h) + 1
 
-                        if top_techs:
-                            append_to_body(create_w_p("TECHNICAL SKILLS", is_heading=True))
-                            append_to_body(create_w_p(", ".join(top_techs)))
+                        for child in list(parent_c)[e_idx:]:
+                            c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                            if any(k in c_txt for k in ["certifications", "languages", "trainings", "contacts", "work experience"]):
+                                break
+                            if child.tag == f"{{{W_NS}}}p":
+                                parent_c.remove(child)
 
-                        if educations:
-                            append_to_body(create_w_p("EDUCATION", is_heading=True))
-                            for edu in educations:
-                                degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
-                                school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
-                                year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
-                                append_to_body(create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
-
-                        if certifications:
-                            append_to_body(create_w_p("CERTIFICATIONS", is_heading=True))
-                            for cert in certifications:
-                                c_name = cert.get("title") or cert.get("name") or str(cert)
-                                append_to_body(create_w_p(f"• {c_name}", is_bullet=True))
-
-                        if languages:
-                            append_to_body(create_w_p("LANGUAGES", is_heading=True))
-                            for lang_str in languages:
-                                append_to_body(create_w_p(f"• {lang_str}", is_bullet=True))
+                        for edu in educations:
+                            degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
+                            school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
+                            year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
+                            p_edu = copy.deepcopy(subheading_proto)
+                            set_p_runs_text(p_edu, f"{degree} — {school} ({year})")
+                            parent_c.insert(e_idx, p_edu)
+                            e_idx += 1
 
                     doc_str = ET.tostring(root, encoding='utf-8').decode('utf-8')
                     doc_str = sanitize_xml_string(doc_str)
@@ -340,6 +323,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com estrita conformidade <w:sectPr> em: {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com PURGA AGRESSIVA em: {docx_output_path}")
         return True
     return False
