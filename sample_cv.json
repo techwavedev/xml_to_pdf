@@ -32,9 +32,9 @@
   },
   "consultant": {
     "id": 10001,
-    "email": "john.doe@example.com",
-    "name": "John",
-    "surname": "Doe",
+    "email": "Doe.hummus@example.com",
+    "name": "Doe",
+    "surname": "Hummus",
     "phone": "(+1) 555-0199",
     "country": "United States",
     "city": "San Francisco",
@@ -52,16 +52,46 @@
   "technical_skills": "DevOps, Cloud Infrastructure, AWS, GCP, Azure, Terraform, Ansible, Docker, Kubernetes, Helm, GitLab CI, GitHub Actions, Jenkins, Prometheus, Grafana, Python, Bash, Go, PostgreSQL, Redis, Linux Administration.",
   "relevant_accomplishments": "• Architected high-availability cloud infrastructure on AWS reducing downtime by 99.99%.\n• Automated multi-region Kubernetes deployments cutting deployment times from hours to minutes.\n• Implemented FinOps cloud cost optimization strategies reducing annual infrastructure spend by 30%.",
   "top_technologies": [
-    { "name": "AWS Cloud Infrastructure", "rating": 5 },
-    { "name": "Kubernetes Orchestration", "rating": 5 },
-    { "name": "Terraform (IaC)", "rating": 5 },
-    { "name": "Linux Systems Administration", "rating": 5 },
-    { "name": "Site Reliability Engineering (SRE)", "rating": 5 },
-    { "name": "ELK Stack (Elasticsearch, Logstash, Kibana)", "rating": 5 },
-    { "name": "Docker & Containerization", "rating": 5 },
-    { "name": "Prometheus & Grafana Observability", "rating": 4 },
-    { "name": "CI/CD (GitLab CI, GitHub Actions, Jenkins)", "rating": 4 },
-    { "name": "TCP/IP Security & Firewall Configuration", "rating": 4 }
+    {
+      "name": "AWS Cloud Infrastructure",
+      "rating": 5
+    },
+    {
+      "name": "Kubernetes Orchestration",
+      "rating": 5
+    },
+    {
+      "name": "Terraform (IaC)",
+      "rating": 5
+    },
+    {
+      "name": "Linux Systems Administration",
+      "rating": 5
+    },
+    {
+      "name": "Site Reliability Engineering (SRE)",
+      "rating": 5
+    },
+    {
+      "name": "ELK Stack (Elasticsearch, Logstash, Kibana)",
+      "rating": 5
+    },
+    {
+      "name": "Docker & Containerization",
+      "rating": 5
+    },
+    {
+      "name": "Prometheus & Grafana Observability",
+      "rating": 4
+    },
+    {
+      "name": "CI/CD (GitLab CI, GitHub Actions, Jenkins)",
+      "rating": 4
+    },
+    {
+      "name": "TCP/IP Security & Firewall Configuration",
+      "rating": 4
+    }
   ],
   "industry_experiences": [
     "Information Technology & Cloud Infrastructure",
@@ -82,7 +112,16 @@
         "Constructed automated CI/CD pipelines in GitLab CI and GitHub Actions, cutting release deployment cycle times by 65%.",
         "Configured unified observability stacks with Prometheus, Grafana, and OpenTelemetry across microservices."
       ],
-      "technologies": ["AWS", "Kubernetes", "Terraform", "GitLab CI", "Prometheus", "Grafana", "Python", "Docker"]
+      "technologies": [
+        "AWS",
+        "Kubernetes",
+        "Terraform",
+        "GitLab CI",
+        "Prometheus",
+        "Grafana",
+        "Python",
+        "Docker"
+      ]
     },
     {
       "title": "Senior Infrastructure Specialist",
@@ -95,7 +134,16 @@
         "Automated patch management and compliance hardening across 300+ Linux servers using Ansible and Python.",
         "Designed disaster recovery and backup automation routines achieving RTO under 15 minutes."
       ],
-      "technologies": ["AWS", "Terraform", "Ansible", "Linux", "Jenkins", "PostgreSQL", "Redis", "Bash"]
+      "technologies": [
+        "AWS",
+        "Terraform",
+        "Ansible",
+        "Linux",
+        "Jenkins",
+        "PostgreSQL",
+        "Redis",
+        "Bash"
+      ]
     },
     {
       "title": "Systems Engineer & DevOps Specialist",
@@ -107,7 +155,15 @@
         "Managed VMware ESXi virtualization cluster and Docker container environments.",
         "Built automated log aggregation and monitoring dashboards using ELK stack and Nagios."
       ],
-      "technologies": ["Linux", "VMware ESXi", "Docker", "ELK Stack", "Nagios", "Python", "MySQL"]
+      "technologies": [
+        "Linux",
+        "VMware ESXi",
+        "Docker",
+        "ELK Stack",
+        "Nagios",
+        "Python",
+        "MySQL"
+      ]
     },
     {
       "title": "Cloud & Linux Systems Administrator",
@@ -119,7 +175,15 @@
         "Configured Nginx web servers and HAProxy load balancers handling peak traffic spikes of 50K concurrent streams.",
         "Automated shell scripting and scheduled backups for MySQL database clusters across hybrid cloud environments."
       ],
-      "technologies": ["Linux CentOS", "Nginx", "HAProxy", "Bash", "MySQL", "Nagios", "Apache"]
+      "technologies": [
+        "Linux CentOS",
+        "Nginx",
+        "HAProxy",
+        "Bash",
+        "MySQL",
+        "Nagios",
+        "Apache"
+      ]
     },
     {
       "title": "Junior Systems & Software Developer",
@@ -131,7 +195,14 @@
         "Wrote Python and shell utilities to streamline software deployment and automated regression tests.",
         "Monitored server health metrics and provided 2nd-level technical escalation support for enterprise clients."
       ],
-      "technologies": ["Python", "Bash", "Linux Ubuntu", "Git", "MySQL", "Shell Scripting"]
+      "technologies": [
+        "Python",
+        "Bash",
+        "Linux Ubuntu",
+        "Git",
+        "MySQL",
+        "Shell Scripting"
+      ]
     }
   ],
   "social_skills": "Strong leadership, communication skills, collaborative mindset, experience working with international cross-functional teams.",

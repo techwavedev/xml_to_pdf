@@ -56,25 +56,48 @@ def convert_docx_to_pdf_cross_platform(docx_path: str, pdf_path: str) -> bool:
         except Exception as e_win:
             print(f"[*] Tentativa de conversão via MS Word no Windows falhou: {e_win}")
 
-    # 2. No macOS (via AppleScript MS Word)
+    # 2. No macOS (via AppleScript MS Word com suporte a inicialização automática e limpeza de travamentos)
     if system == "Darwin":
-        applescript = f'''
-        tell application "Microsoft Word"
-            open (POSIX file "{abs_docx}")
-            save as active document file name "{abs_pdf}" file format format PDF
-            close active document saving no
-        end tell
-        '''
+        # Garante permissões de leitura/escrita no arquivo
         try:
-            subprocess.run(["osascript", "-e", applescript], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print(f"[✓] DOCX convertido para PDF via MS Word (macOS): {pdf_path}")
-            return True
+            os.chmod(abs_docx, 0o666)
         except Exception:
             pass
 
+        # Limpa arquivo de trava (~$filename.docx) se existir
+        docx_dir = os.path.dirname(abs_docx)
+        docx_name = os.path.basename(abs_docx)
+        lock_file = os.path.join(docx_dir, f"~${docx_name}")
+        if os.path.exists(lock_file):
+            try:
+                os.remove(lock_file)
+            except Exception:
+                pass
+
+        stem = Path(abs_docx).stem
+        applescript = f'''
+        tell application "Microsoft Word"
+            activate
+            try
+                close (every document whose name contains "{stem}") saving no
+            end try
+            open (POSIX file "{abs_docx}")
+            set activeDoc to active document
+            save as activeDoc file name "{abs_pdf}" file format format PDF
+            close activeDoc saving no
+        end tell
+        '''
+        try:
+            res = subprocess.run(["osascript", "-e", applescript], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if os.path.exists(abs_pdf) and os.path.getsize(abs_pdf) > 0:
+                print(f"[✓] DOCX convertido para PDF via MS Word (macOS): {pdf_path}")
+                return True
+        except Exception as e_mac:
+            print(f"[*] Conversão via MS Word no macOS: {e_mac}")
+
     # 3. No Linux, Windows ou macOS (via LibreOffice / soffice se instalado)
-    soffice_bin = shutil.which("soffice") or shutil.which("libreoffice")
-    if soffice_bin:
+    soffice_bin = shutil.which("soffice") or shutil.which("libreoffice") or "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+    if soffice_bin and (os.path.exists(soffice_bin) if os.path.isabs(soffice_bin) else True):
         try:
             out_dir = os.path.dirname(abs_pdf)
             cmd = [soffice_bin, "--headless", "--convert-to", "pdf", abs_docx, "--outdir", out_dir]
@@ -309,63 +332,48 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx de entrada, USA EXCLUSIVAMENTE O FORMATO DO DOCX (SEM HTML!)
+    # 2. Se for especificado um arquivo .docx de entrada, limpa os rodapés, atualiza foto/dados e tenta conversão nativa
     if docx_template and os.path.exists(docx_template):
         sample_stem = Path(docx_template).stem
-        print(f"\n[*] Utilizando modelo .docx de entrada como DESIGN EXCLUSIVO: {docx_template}")
+        print(f"\n[*] Utilizando modelo .docx de entrada: {docx_template} (Design: {effective_template})")
         
-        # Gera o DOCX populado com o layout e formatação originais do modelo
         populated_docx = str(OUTPUT_DIR / f"{sample_stem}_{c_name}.docx")
         clean_docx_completely.clean_docx_sprint(docx_template, populated_docx, photo_path="assets/photo.png", json_data=json_data)
-        print(f"[✓] Documento Word populado mantendo 100% da formatação original salvo em: {populated_docx}")
         
-        # Converte o .docx populado para PDF com 100% de fidelidade ao layout do Word
+        # Converte o .docx para PDF de forma nativa
         success = convert_docx_to_pdf_cross_platform(populated_docx, temp_pdf)
         
-        if success:
-            embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
-            if os.path.exists(temp_pdf):
-                os.remove(temp_pdf)
-            if not out_docx and os.path.exists(populated_docx):
-                os.remove(populated_docx)
-            print(f"\n=======================================================")
-            print(f" 🎉 PDF GERADO COM 100% DE FIDELIDADE AO MODELO DOCX! ({platform.system()})")
-            print(f" 📄 PDF de Saída (Layout do Word): {output_pdf}")
-            print(f" 🎨 Modelo .docx utilizado: {docx_template}")
-            print(f"=======================================================\n")
-            return
-        else:
-            print(f"\n[❌] Erro: Não foi possível converter o arquivo .docx nativamente para PDF.")
-            print(f"     O seu arquivo Word populado com a formatação EXATA do modelo foi salvo em:")
-            print(f"        -> {populated_docx}")
-            print(f"     Para gerar o PDF com a formatação exata do Word no macOS:")
-            print(f"     1. Abra o aplicativo 'Microsoft Word' no seu Mac, e")
-            print(f"     2. Re-execute o seu comando python no Terminal.")
-            sys.exit(1)
+        if not success:
+            print(f"[*] Renderizando versão em PDF usando o design gráfico '{effective_template}'...")
+            rendered_html = render_html_template(json_data, effective_template)
+            html_to_pdf(rendered_html, temp_pdf)
+            if os.path.exists(rendered_html):
+                os.remove(rendered_html)
+                
+        # Remove o arquivo .docx temporário caso o usuário NÃO tenha pedido --out-docx
+        if not out_docx and os.path.exists(populated_docx):
+            os.remove(populated_docx)
+        elif out_docx and os.path.exists(populated_docx):
+            print(f"[✓] Arquivo DOCX de saída mantido a pedido do usuário em: {populated_docx}")
     else:
-        # 3. Renderizar HTML a partir do Template escolhido se NENHUM arquivo .docx for fornecido
+        # 3. Renderizar HTML a partir do Template escolhido se nenhum .docx for fornecido
         rendered_html = render_html_template(json_data, effective_template)
         html_to_pdf(rendered_html, temp_pdf)
         if os.path.exists(rendered_html):
             os.remove(rendered_html)
-        embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
-        if os.path.exists(temp_pdf):
-            os.remove(temp_pdf)
 
     # 4. Injetar XML e Metadados ATS no PDF final de saída
-    # (Removido daqui pois já processado dentro dos blocos if/else acima)
+    embed_xml_cv.embed_xml_into_pdf(temp_pdf, xml_output_path, output_pdf, attachment_name="resume.xml")
 
-    # Limpeza de arquivos temporários
+    # Limpeza de PDF temporário
     if os.path.exists(temp_pdf):
         os.remove(temp_pdf)
 
     print(f"\n=======================================================")
-    print(f" 🎉 PROCESSO CONCLUÍDO COM SUCESSO! ({platform.system()})")
-    print(f" 📄 PDF de Saída (Final): {output_pdf}")
+    print(f" 🎉 PDF OTIMIZADO PARA ATS GERADO COM SUCESSO! ({platform.system()})")
+    print(f" 📄 Arquivo PDF de Saída: {output_pdf}")
     print(f" 📊 Base de dados JSON: {json_path}")
-    print(f" 🎨 Modelo utilizado: {docx_template or template_name}")
-    if out_docx:
-        print(f" 📝 DOCX de Saída Adicional: {out_docx}")
+    print(f" 🎨 Modelo utilizado: {docx_template or effective_template}")
     print(f"=======================================================\n")
 
 def list_templates():

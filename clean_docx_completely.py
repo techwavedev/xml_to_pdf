@@ -139,7 +139,8 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
                         location = f"{city}, {country}".strip(", ")
                         linkedin = consultant.get("linkedin", "")
                         summary = json_data.get("about") or json_data.get("cv_summary") or ""
-                        top_techs = json_data.get("top_technologies") or []
+                        top_techs_raw = json_data.get("top_technologies") or []
+                        top_techs = [t.get("name") if isinstance(t, dict) else str(t) for t in top_techs_raw]
                         techs_str = ", ".join(top_techs)
 
                         context = {
@@ -168,9 +169,11 @@ def clean_docx_sprint(docx_input_path: str, docx_output_path: str, photo_path: s
                         except Exception as e_tmpl:
                             print(f"[*] Aviso na renderização Jinja2 em {fname}: {e_tmpl}")
 
-                        # 3. Substituição dinâmica de padrões de cabeçalho (primeiro nome do título)
+                        # 3. Substituição segura de cabeçalho do candidato
                         if fullname:
-                            doc_str = re.sub(r'(<w:t[^>]*>)[A-Z][a-z]+\s+[A-Z][a-z]+(</w:t>)', r'\g<1>' + html.escape(fullname, quote=False) + r'\g<2>', doc_str, count=1)
+                            doc_str = re.sub(r'(?i)elton\s+machado', html.escape(fullname, quote=False), doc_str)
+                            doc_str = re.sub(r'(?i)elton', html.escape(name, quote=False), doc_str)
+                            doc_str = re.sub(r'(?i)machado', html.escape(surname, quote=False), doc_str)
                         if title:
                             doc_str = re.sub(r'(?i)Senior Platform Engineer.*?Architect', html.escape(title, quote=False), doc_str)
                             doc_str = re.sub(r'(?i)DevOps Engineer', html.escape(title, quote=False), doc_str)
