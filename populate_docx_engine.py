@@ -42,7 +42,86 @@ def extract_candidate_languages(json_data: dict) -> list:
 
     return langs
 
-def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
+def get_run_font_size(r: ET.Element) -> float:
+    rPr = r.find(f"{{{W_NS}}}rPr")
+    if rPr is not None:
+        sz = rPr.find(f"{{{W_NS}}}sz")
+        if sz is not None and f"{{{W_NS}}}val" in sz.attrib:
+            try:
+                return float(sz.attrib[f"{{{W_NS}}}val"]) / 2.0
+            except ValueError:
+                pass
+    return 10.0
+
+def sanitize_paragraph_style(p: ET.Element):
+    pPr = p.find(f"{{{W_NS}}}pPr")
+    if pPr is not None:
+        pStyle = pPr.find(f"{{{W_NS}}}pStyle")
+        if pStyle is not None:
+            pPr.remove(pStyle)
+        
+        rPr = pPr.find(f"{{{W_NS}}}rPr")
+        if rPr is not None:
+            for tag in ["sz", "szCs"]:
+                elem = rPr.find(f"{{{W_NS}}}{tag}")
+                if elem is not None:
+                    rPr.remove(elem)
+
+def set_run_font_size(r: ET.Element, pt_size: float):
+    rPr = r.find(f"{{{W_NS}}}rPr")
+    if rPr is None:
+        rPr = ET.SubElement(r, f"{{{W_NS}}}rPr")
+    
+    val_str = str(int(pt_size * 2))
+    
+    sz = rPr.find(f"{{{W_NS}}}sz")
+    if sz is None:
+        sz = ET.SubElement(rPr, f"{{{W_NS}}}sz")
+    sz.attrib[f"{{{W_NS}}}val"] = val_str
+
+    szCs = rPr.find(f"{{{W_NS}}}szCs")
+    if szCs is None:
+        szCs = ET.SubElement(rPr, f"{{{W_NS}}}szCs")
+    szCs.attrib[f"{{{W_NS}}}val"] = val_str
+
+def create_run_with_exact_proto(text: str, proto_r: ET.Element = None, target_pt: float = None) -> ET.Element:
+    if proto_r is not None:
+        new_r = copy.deepcopy(proto_r)
+    else:
+        new_r = ET.Element(f"{{{W_NS}}}r")
+
+    t_elem = new_r.find(f"{{{W_NS}}}t")
+    if t_elem is None:
+        t_elem = ET.SubElement(new_r, f"{{{W_NS}}}t")
+    t_elem.text = text
+
+    if target_pt is not None:
+        set_run_font_size(new_r, target_pt)
+    else:
+        current_sz = get_run_font_size(new_r)
+        if current_sz > 14.0:
+            set_run_font_size(new_r, 10.0)
+
+    return new_r
+
+def set_p_text_with_proto_r(p: ET.Element, text: str, proto_r: ET.Element = None, target_pt: float = None):
+    sanitize_paragraph_style(p)
+    runs = list(p.findall(f"{{{W_NS}}}r"))
+    
+    if proto_r is None and runs:
+        for r in runs:
+            if get_run_font_size(r) <= 14.0:
+                proto_r = r
+                break
+        if proto_r is None:
+            proto_r = runs[0]
+
+    for r in runs:
+        p.remove(r)
+
+    p.append(create_run_with_exact_proto(text, proto_r, target_pt))
+
+def replace_dynamic_text_in_tree(root: ET.Element, json_data: dict):
     consultant = json_data.get("consultant", {})
     name = consultant.get("name", "")
     surname = consultant.get("surname", "")
@@ -53,68 +132,25 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
     country = consultant.get("country", "")
     location = f"{city}, {country}".strip(", ")
     linkedin = consultant.get("linkedin", "")
-    work_auth = consultant.get("work_authorization") or (f"{consultant.get('nationality')} Citizen" if consultant.get('nationality') else "")
 
-    if email:
-        xml_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', html.escape(email, quote=False), xml_str)
+    for p in root.iter(f"{{{W_NS}}}p"):
+        p_txt = ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text])
+        if not p_txt.strip():
+            continue
 
-    if linkedin:
-        xml_str = re.sub(r'(?i)(?:https?://)?(?:[a-z0-9-]+\.)*linkedin\.com/[^\s<"\']+', html.escape(linkedin, quote=False), xml_str)
+        if "elton" in p_txt.lower() or "machado" in p_txt.lower():
+            if "@" in p_txt and email:
+                set_p_text_with_proto_r(p, f"Email: {email}")
+            elif "linkedin" in p_txt.lower() and linkedin:
+                set_p_text_with_proto_r(p, f"LinkedIn: {linkedin}")
+            elif len(p_txt) < 40 and fullname:
+                set_p_text_with_proto_r(p, fullname)
 
-    if phone:
-        xml_str = re.sub(r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}', html.escape(phone, quote=False), xml_str)
-
-    if location:
-        xml_str = re.sub(r'Aveiro\s*,\s*Portugal', html.escape(location, quote=False), xml_str)
-        xml_str = re.sub(r'Itapema,\s*SC', html.escape(location, quote=False), xml_str)
-        if city:
-            xml_str = re.sub(r'(?i)\baveiro\b', html.escape(city, quote=False), xml_str)
-            xml_str = re.sub(r'(?i)\bitapema\b', html.escape(city, quote=False), xml_str)
-        if country:
-            xml_str = re.sub(r'(?i)\bportugal\b', html.escape(country, quote=False), xml_str)
-
-    if fullname:
-        xml_str = re.sub(r'(?i)elton\s+machado', html.escape(fullname, quote=False), xml_str)
-        if name:
-            xml_str = re.sub(r'(?i)\belton\b', html.escape(name, quote=False), xml_str)
-        if surname:
-            xml_str = re.sub(r'(?i)\bmachado\b', html.escape(surname, quote=False), xml_str)
-
-    if work_auth:
-        xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', html.escape(work_auth, quote=False), xml_str)
-        xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', html.escape(work_auth, quote=False), xml_str)
-    else:
-        xml_str = re.sub(r'(?i)Work\s+Authorization:[^\n<"\']*', '', xml_str)
-        xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', '', xml_str)
-        xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', '', xml_str)
-
-    return xml_str
-
-def set_p_runs_text(p: ET.Element, text: str):
-    """Substitui o texto preservando a estrutura de runs originais."""
-    runs = list(p.findall(f"{{{W_NS}}}r"))
-    if not runs:
-        r = ET.SubElement(p, f"{{{W_NS}}}r")
-        t = ET.SubElement(r, f"{{{W_NS}}}t")
-        t.text = text
-        return
-
-    first_r = runs[0]
-    for r in runs[1:]:
-        p.remove(r)
-
-    t_elem = first_r.find(f"{{{W_NS}}}t")
-    if t_elem is None:
-        t_elem = ET.SubElement(first_r, f"{{{W_NS}}}t")
-    t_elem.text = text
+        if any(loc in p_txt for loc in ["Aveiro", "Portugal", "Itapema", "SC"]) and location:
+            if not any(k in p_txt.lower() for k in ["experience", "summary", "education"]):
+                set_p_text_with_proto_r(p, f"Location: {location}")
 
 def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
-    """
-    Motor Genérico de Povoamento com PURGA TOTAL DE 200+ PARÁGRAFOS E TABELAS SOBRESSALENTES:
-    - Remove 100% de classificações de auto-avaliação, tabelas de anos de experiência e treinamentos antigos.
-    - Povoa todas as 5 experiências profissionais e seções exclusivamente do JSON.
-    - Preserva o layout e formatação do modelo OpenXML original.
-    """
     if not os.path.exists(docx_input_path):
         print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
         return False
@@ -122,10 +158,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
     consultant = json_data.get("consultant", {})
     fullname = f"{consultant.get('name', '')} {consultant.get('surname', '')}".strip()
     title = json_data.get("present_job_title", "")
-    email = consultant.get("email", "")
-    phone = consultant.get("phone", "")
-    location = f"{consultant.get('city', '')}, {consultant.get('country', '')}".strip(", ")
-    linkedin = consultant.get("linkedin", "")
     summary = json_data.get("about") or json_data.get("cv_summary") or ""
     
     exps = json_data.get("work_experiences", [])
@@ -167,147 +199,192 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
                 elif fname == 'word/document.xml':
                     doc_str = data.decode('utf-8')
-                    doc_str = replace_dynamic_contact_regex(doc_str, json_data)
                     root = ET.fromstring(doc_str)
 
-                    body = root.find(f"{{{W_NS}}}body")
+                    # 1. Substituição Dinâmica de Contatos e Nome no XML Tree
+                    replace_dynamic_text_in_tree(root, json_data)
 
-                    # PURGA AGRESSIVA DE 200+ PARÁGRAFOS/TABELAS DE AMOSTRAS SOBRESSALENTES
-                    forbidden_sample_keywords = [
-                        "competence rating", "self-assessment", "industry experience",
-                        "european institutions", "trainings", "hashicorp", "hackerrank",
-                        "years)", "scale from 1 to 5", "banking", "education management"
-                    ]
+                    # 2. Purga de Skill Ratings Legados (APENAS PARÁGRAFOS <w:p>, NUNCA TABELAS PRINCIPAIS)
+                    for parent in list(root.iter()):
+                        if parent.tag in [f"{{{W_NS}}}body", f"{{{W_NS}}}tc"]:
+                            for child in list(parent):
+                                if child.tag == f"{{{W_NS}}}p":
+                                    c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).strip()
+                                    if re.search(r'\(\d+(\.\d+)?\s*years?\)', c_txt, re.IGNORECASE) or any(kw in c_txt.lower() for kw in [
+                                        "competence rating", "self-assessment", "industry experience",
+                                        "european institutions", "trainings", "hashicorp", "hackerrank",
+                                        "technology experience*"
+                                    ]):
+                                        parent.remove(child)
 
-                    for p_elem in list(root.iter()):
-                        for child in list(p_elem):
-                            c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
-                            if any(kw in c_txt for kw in forbidden_sample_keywords):
-                                if child.tag in [f"{{{W_NS}}}p", f"{{{W_NS}}}tbl"]:
-                                    p_elem.remove(child)
-
-                    # Localiza a tabela principal do cabeçalho / grid
-                    tables = list(root.iter(f"{{{W_NS}}}tbl"))
+                    # 3. EXTRAÇÃO DE PROTÓTIPOS DE RUN COM TAMANHO DE FONTE RIGOROSO
                     all_p = list(root.iter(f"{{{W_NS}}}p"))
 
-                    heading_proto = None
-                    subheading_proto = None
-                    body_proto = None
-                    bullet_proto = None
+                    subheading_proto_r = None
+                    body_proto_r = None
+                    bullet_proto_r = None
+
+                    subheading_p_proto = None
+                    body_p_proto = None
+                    bullet_p_proto = None
 
                     for p in all_p:
                         p_txt = ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).strip()
-                        if any(k in p_txt.lower() for k in ["work experience", "professional experience", "education", "skills", "languages", "summary"]):
-                            if heading_proto is None:
-                                heading_proto = copy.deepcopy(p)
-                        elif p_txt.startswith("-") or p_txt.startswith("•"):
-                            if bullet_proto is None:
-                                bullet_proto = copy.deepcopy(p)
-                        elif len(p_txt) > 40:
-                            if body_proto is None:
-                                body_proto = copy.deepcopy(p)
-                        elif len(p_txt) > 0 and subheading_proto is None:
-                            subheading_proto = copy.deepcopy(p)
+                        if not p_txt:
+                            continue
 
-                    if heading_proto is None and all_p:
-                        heading_proto = copy.deepcopy(all_p[0])
-                    if body_proto is None and all_p:
-                        body_proto = copy.deepcopy(all_p[-1])
-                    if subheading_proto is None:
-                        subheading_proto = copy.deepcopy(heading_proto)
-                    if bullet_proto is None:
-                        bullet_proto = copy.deepcopy(body_proto)
+                        runs = p.findall(f"{{{W_NS}}}r")
+                        for r in runs:
+                            # CRITICAL FIX: NEVER use a run as a prototype if it contains a drawing or image!
+                            if r.find(f".//{{{W_NS}}}drawing") is not None or r.find(f".//{{{W_NS}}}pict") is not None:
+                                continue
+                                
+                            t_elem = r.find(f"{{{W_NS}}}t")
+                            if t_elem is None or not t_elem.text or not t_elem.text.strip():
+                                continue
 
-                    primary_table = tables[0] if len(tables) > 0 else None
-                    is_full_sidebar_layout = False
-                    sidebar_tc = None
-                    main_tc = None
+                            sz = get_run_font_size(r)
+                            if sz <= 10.0:
+                                if body_proto_r is None:
+                                    body_proto_r = copy.deepcopy(r)
+                                    body_p_proto = copy.deepcopy(p)
+                                if p_txt.startswith("-") or p_txt.startswith("•"):
+                                    if bullet_proto_r is None:
+                                        bullet_proto_r = copy.deepcopy(r)
+                                        bullet_p_proto = copy.deepcopy(p)
+                            elif 10.5 <= sz <= 14.0:
+                                if subheading_proto_r is None:
+                                    subheading_proto_r = copy.deepcopy(r)
+                                    subheading_p_proto = copy.deepcopy(p)
 
-                    if primary_table is not None:
-                        tbl_text = ''.join([t.text for t in primary_table.iter(f"{{{W_NS}}}t") if t.text]).lower()
-                        if any(k in tbl_text for k in ["work experience", "professional experience", "professional summary", "elton"]):
-                            cells = list(primary_table.iter(f"{{{W_NS}}}tc"))
-                            if len(cells) >= 2:
-                                is_full_sidebar_layout = True
-                                sidebar_tc = cells[0]
-                                main_tc = cells[-1]
-
-                    target_main_container = main_tc if is_full_sidebar_layout and main_tc is not None else body
-                    target_sidebar_container = sidebar_tc if is_full_sidebar_layout and sidebar_tc is not None else body
-
-                    # 1. Resumo Profissional
-                    if summary:
-                        summary_ps = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if "summary" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
-                        if summary_ps:
-                            p_idx = list(target_main_container).index(summary_ps[0])
-                            if p_idx + 1 < len(target_main_container) and target_main_container[p_idx + 1].tag == f"{{{W_NS}}}p":
-                                set_p_runs_text(target_main_container[p_idx + 1], summary)
-
-                    # 2. Experiências Profissionais
-                    exp_headings = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if any(k in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower() for k in ["work experience", "professional experience"])]
-                    if exp_headings and exps:
-                        exp_h = exp_headings[0]
-                        start_idx = list(target_main_container).index(exp_h) + 1
-
-                        for child in list(target_main_container)[start_idx:]:
-                            child_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
-                            if any(k in child_txt for k in ["education", "certifications", "languages", "technical skills"]):
+                    if body_proto_r is None and all_p:
+                        for p in reversed(all_p):
+                            runs = p.findall(f"{{{W_NS}}}r")
+                            if runs and get_run_font_size(runs[0]) <= 14.0:
+                                body_proto_r = copy.deepcopy(runs[0])
+                                body_p_proto = copy.deepcopy(p)
                                 break
-                            if child.tag == f"{{{W_NS}}}p":
-                                target_main_container.remove(child)
+                    if subheading_proto_r is None:
+                        subheading_proto_r = copy.deepcopy(body_proto_r)
+                        subheading_p_proto = copy.deepcopy(body_p_proto)
+                    if bullet_proto_r is None:
+                        bullet_proto_r = copy.deepcopy(body_proto_r)
+                        bullet_p_proto = copy.deepcopy(body_p_proto)
 
-                        curr_idx = start_idx
+                    # 4. BUSCA ANCORA E CONTAINER PAI DIRETO (tc ou body)
+                    exp_start_p = None
+                    exp_target_container = None
+
+                    sample_company_keywords = [
+                        "work experience", "professional experience", "employment history",
+                        "experience", "tenforce", "biglevel", "whooo", "helimax", "cloud architect",
+                        "senior platform engineer", "european commission"
+                    ]
+
+                    for parent in root.iter():
+                        if parent.tag in [f"{{{W_NS}}}body", f"{{{W_NS}}}tc"]:
+                            for child in list(parent):
+                                if child.tag == f"{{{W_NS}}}p":
+                                    txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                                    if any(k in txt for k in ["work experience", "professional experience", "employment history"]) or txt == "experience":
+                                        exp_start_p = child
+                                        exp_target_container = parent
+                                        break
+                            if exp_start_p is not None:
+                                break
+
+                    if exp_start_p is None:
+                        tables = list(root.iter(f"{{{W_NS}}}tbl"))
+                        body = root.find(f"{{{W_NS}}}body")
+                        target_c = body
+                        if len(tables) > 0:
+                            cells = list(tables[0].iter(f"{{{W_NS}}}tc"))
+                            if len(cells) >= 2:
+                                target_c = cells[-1]
+
+                        for child in list(target_c):
+                            if child.tag == f"{{{W_NS}}}p":
+                                txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                                if any(k in txt for k in sample_company_keywords) or re.search(r'\d{2}-\d{4}\s*-\s*\d{2}-\d{4}', txt):
+                                    exp_start_p = child
+                                    exp_target_container = target_c
+                                    break
+
+                    if exp_start_p is not None and exp_target_container is not None and exps:
+                        curr_children = list(exp_target_container)
+                        s_idx = curr_children.index(exp_start_p)
+                        txt_start = ''.join([t.text for t in exp_start_p.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                        is_header = any(k in txt_start for k in ["work experience", "professional experience", "employment history"]) or txt_start == "experience"
+                        
+                        start_insert_idx = s_idx + (1 if is_header else 0)
+
+                        nodes_to_remove = []
+                        for child in curr_children[start_insert_idx:]:
+                            if child.tag in [f"{{{W_NS}}}p", f"{{{W_NS}}}tbl"]:
+                                c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower().strip()
+                                
+                                # CRITICAL FIX: Only break if it's ACTUALLY a heading (short text exact match).
+                                # DO NOT break just because a job description says "teaching skills".
+                                if c_txt in ["education", "certifications", "languages", "technical skills", "skills", "training"]:
+                                    break
+                                
+                                # Add the old node to be deleted.
+                                nodes_to_remove.append(child)
+
+                        # Se a própria âncora inicial não for um header genérico, remova ela também
+                        if not is_header and exp_start_p in list(exp_target_container):
+                            nodes_to_remove.append(exp_start_p)
+
+                        for node in set(nodes_to_remove):
+                            if node in list(exp_target_container):
+                                exp_target_container.remove(node)
+
+                        insert_pos = s_idx if not is_header else s_idx + 1
                         for exp in exps:
                             exp_title = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
-                            p_title = copy.deepcopy(subheading_proto)
-                            set_p_runs_text(p_title, exp_title)
-                            target_main_container.insert(curr_idx, p_title)
-                            curr_idx += 1
+                            p_title = copy.deepcopy(subheading_p_proto) if subheading_p_proto is not None else ET.Element(f"{{{W_NS}}}p")
+                            set_p_text_with_proto_r(p_title, exp_title, subheading_proto_r, target_pt=11.0)
+                            exp_target_container.insert(insert_pos, p_title)
+                            insert_pos += 1
 
                             if exp.get("description"):
-                                p_desc = copy.deepcopy(body_proto)
-                                set_p_runs_text(p_desc, exp["description"])
-                                target_main_container.insert(curr_idx, p_desc)
-                                curr_idx += 1
+                                p_desc = copy.deepcopy(body_p_proto) if body_p_proto is not None else ET.Element(f"{{{W_NS}}}p")
+                                set_p_text_with_proto_r(p_desc, exp["description"], body_proto_r, target_pt=9.5)
+                                exp_target_container.insert(insert_pos, p_desc)
+                                insert_pos += 1
 
                             for task in exp.get("responsibilities", []):
-                                p_task = copy.deepcopy(bullet_proto)
+                                p_task = copy.deepcopy(bullet_p_proto) if bullet_p_proto is not None else ET.Element(f"{{{W_NS}}}p")
                                 task_str = task if task.startswith("•") or task.startswith("-") else f"• {task}"
-                                set_p_runs_text(p_task, task_str)
-                                target_main_container.insert(curr_idx, p_task)
-                                curr_idx += 1
+                                set_p_text_with_proto_r(p_task, task_str, bullet_proto_r, target_pt=9.5)
+                                exp_target_container.insert(insert_pos, p_task)
+                                insert_pos += 1
 
                             if exp.get("technologies"):
-                                p_tech = copy.deepcopy(body_proto)
-                                set_p_runs_text(p_tech, f"Technologies: {', '.join(exp['technologies'])}")
-                                target_main_container.insert(curr_idx, p_tech)
-                                curr_idx += 1
+                                p_tech = copy.deepcopy(body_p_proto) if body_p_proto is not None else ET.Element(f"{{{W_NS}}}p")
+                                set_p_text_with_proto_r(p_tech, f"Technologies: {', '.join(exp['technologies'])}", body_proto_r, target_pt=9.0)
+                                exp_target_container.insert(insert_pos, p_tech)
+                                insert_pos += 1
 
-                    # 3. Educação
-                    edu_headings = [p for p in target_main_container.findall(f"{{{W_NS}}}p") if "education" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
-                    if not edu_headings and target_sidebar_container != target_main_container:
-                        edu_headings = [p for p in target_sidebar_container.findall(f"{{{W_NS}}}p") if "education" in ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).lower()]
-
-                    if edu_headings and educations:
-                        edu_h = edu_headings[0]
-                        parent_c = target_sidebar_container if edu_h in list(target_sidebar_container) else target_main_container
-                        e_idx = list(parent_c).index(edu_h) + 1
-
-                        for child in list(parent_c)[e_idx:]:
-                            c_txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
-                            if any(k in c_txt for k in ["certifications", "languages", "trainings", "contacts", "work experience"]):
+                    # 5. SUBSTITUIÇÃO DO RESUMO PROFISSIONAL
+                    summary_h_p = None
+                    summary_container = None
+                    for container in root.iter():
+                        if container.tag in [f"{{{W_NS}}}body", f"{{{W_NS}}}tc"]:
+                            for child in list(container):
+                                if child.tag == f"{{{W_NS}}}p":
+                                    txt = ''.join([t.text for t in child.iter(f"{{{W_NS}}}t") if t.text]).lower()
+                                    if any(k in txt for k in ["professional summary", "summary", "about me", "my mission"]):
+                                        summary_h_p = child
+                                        summary_container = container
+                                        break
+                            if summary_h_p is not None:
                                 break
-                            if child.tag == f"{{{W_NS}}}p":
-                                parent_c.remove(child)
 
-                        for edu in educations:
-                            degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
-                            school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
-                            year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
-                            p_edu = copy.deepcopy(subheading_proto)
-                            set_p_runs_text(p_edu, f"{degree} — {school} ({year})")
-                            parent_c.insert(e_idx, p_edu)
-                            e_idx += 1
+                    if summary_h_p is not None and summary_container is not None and summary:
+                        s_idx = list(summary_container).index(summary_h_p) + 1
+                        if s_idx < len(summary_container) and summary_container[s_idx].tag == f"{{{W_NS}}}p":
+                            set_p_text_with_proto_r(summary_container[s_idx], summary, body_proto_r, target_pt=9.5)
 
                     doc_str = ET.tostring(root, encoding='utf-8').decode('utf-8')
                     doc_str = sanitize_xml_string(doc_str)
@@ -315,7 +392,9 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
                 elif fname.startswith('word/header') or fname.startswith('word/footer'):
                     doc_str = data.decode('utf-8')
-                    doc_str = replace_dynamic_contact_regex(doc_str, json_data)
+                    root = ET.fromstring(doc_str)
+                    replace_dynamic_text_in_tree(root, json_data)
+                    doc_str = ET.tostring(root, encoding='utf-8').decode('utf-8')
                     doc_str = sanitize_xml_string(doc_str)
                     jout.writestr(item, doc_str.encode('utf-8'))
                 else:
@@ -323,6 +402,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com PURGA AGRESSIVA em: {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com SUPORTE COMPLETO A EXPERT.DOCX em: {docx_output_path}")
         return True
     return False
