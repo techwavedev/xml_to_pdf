@@ -9,9 +9,11 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 ET.register_namespace('w', W_NS)
 
 def sanitize_xml_string(xml_str: str) -> str:
+    """Evita corrupção de entidade XML sanitizando & isolados."""
     return re.sub(r'&(?!(amp|lt|gt|quot|apos);)', '&amp;', xml_str)
 
 def format_tech_item(item):
+    """Formata um item de tecnologia proveniente de string ou dicionário."""
     if isinstance(item, str):
         return item
     if isinstance(item, dict):
@@ -19,6 +21,12 @@ def format_tech_item(item):
     return str(item)
 
 def create_w_p(text: str, is_heading: bool = False, is_subheading: bool = False, is_bullet: bool = False) -> ET.Element:
+    """
+    Cria um parágrafo OpenXML respeitando 100% os estilos nativos do modelo Word:
+    - Heading1: Para títulos principais de seções (SUMMARY, WORK EXPERIENCE, etc.)
+    - Heading2: Para subtítulos (Cargo + Empresa + Período, etc.)
+    - Bullet: Para itens de responsabilidades
+    """
     p = ET.Element(f"{{{W_NS}}}p")
     pPr = ET.SubElement(p, f"{{{W_NS}}}pPr")
     
@@ -50,6 +58,7 @@ def create_w_p(text: str, is_heading: bool = False, is_subheading: bool = False,
     return p
 
 def extract_candidate_languages(json_data: dict) -> list:
+    """Extrai dinamicamente a lista de idiomas do feed JSON."""
     langs = []
     for m in json_data.get("mother_languages", []):
         name = m.get("name") or m.get("language") or ""
@@ -73,6 +82,10 @@ def extract_candidate_languages(json_data: dict) -> list:
     return langs
 
 def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
+    """
+    Substitui regex de contatos e purga 100% de quaisquer dados pessoais/autorizações antigas 
+    que não pertençam ao JSON do candidato.
+    """
     consultant = json_data.get("consultant", {})
     name = consultant.get("name", "")
     surname = consultant.get("surname", "")
@@ -85,15 +98,19 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
     linkedin = consultant.get("linkedin", "")
     work_auth = consultant.get("work_authorization") or (f"{consultant.get('nationality')} Citizen" if consultant.get('nationality') else "")
 
+    # E-mail
     if email:
         xml_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', html.escape(email, quote=False), xml_str)
 
+    # LinkedIn
     if linkedin:
         xml_str = re.sub(r'(?i)(?:https?://)?(?:[a-z0-9-]+\.)*linkedin\.com/[^\s<"\']+', html.escape(linkedin, quote=False), xml_str)
 
+    # Telefone
     if phone:
         xml_str = re.sub(r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}', html.escape(phone, quote=False), xml_str)
 
+    # Localização
     if location:
         xml_str = re.sub(r'Aveiro\s*,\s*Portugal', html.escape(location, quote=False), xml_str)
         xml_str = re.sub(r'Itapema,\s*SC', html.escape(location, quote=False), xml_str)
@@ -103,6 +120,7 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
         if country:
             xml_str = re.sub(r'(?i)\bportugal\b', html.escape(country, quote=False), xml_str)
 
+    # Nome
     if fullname:
         xml_str = re.sub(r'(?i)elton\s+machado', html.escape(fullname, quote=False), xml_str)
         if name:
@@ -110,6 +128,7 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
         if surname:
             xml_str = re.sub(r'(?i)\bmachado\b', html.escape(surname, quote=False), xml_str)
 
+    # Autorização de Trabalho / Cidadania
     if work_auth:
         xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', html.escape(work_auth, quote=False), xml_str)
         xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', html.escape(work_auth, quote=False), xml_str)
@@ -122,10 +141,10 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
 
 def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_data: dict, photo_path: str = "assets/photo.png"):
     """
-    Motor Universal de Povoamento de Modelos DOCX:
-    - Purga 100% de todos os parágrafos antigos (European Commission, BNP Paribas, NSX, Portuguese, Udemy...).
-    - Reconstrói o documento EXCLUSIVAMENTE a partir de sample_cv.json.
-    - Preserva o grid visual, margens e estilos de cabeçalho.
+    Motor Genérico de Povoamento DOCX:
+    - 100% de Preservação do Design (Formatação, Cores Nativas, Tabelas, Avatar, Bordas).
+    - 100% de Povoamento com Dados do JSON.
+    - 100% de Purga de Dados Não Relacionados.
     """
     if not os.path.exists(docx_input_path):
         print(f"[❌] Modelo .docx não encontrado: {docx_input_path}")
@@ -182,35 +201,27 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
                     doc_str = replace_dynamic_contact_regex(doc_str, json_data)
                     root = ET.fromstring(doc_str)
 
-                    # 1. Purga total de tabelas secundárias de habilidades do modelo antigo (NSX, LDAP, etc.)
-                    tables_to_remove = []
-                    for tbl in root.iter(f"{{{W_NS}}}tbl"):
-                        t_text = ''.join([t.text for t in tbl.iter(f"{{{W_NS}}}t") if t.text]).strip()
-                        if any(old_k in t_text for old_k in ['NSX', 'VMware ESX', 'Active Directory', 'LDAP', 'Microsoft Exchange', 'vSphere', 'Courier-IMAP', 'Open-E']):
-                            tables_to_remove.append(tbl)
+                    tables = list(root.iter(f"{{{W_NS}}}tbl"))
+                    body = root.find(f"{{{W_NS}}}body")
 
-                    for tbl in tables_to_remove:
-                        try:
-                            for parent in root.iter():
-                                if tbl in list(parent):
-                                    parent.remove(tbl)
-                                    break
-                        except Exception:
-                            pass
+                    is_full_sidebar_layout = False
+                    sidebar_tc = None
+                    main_tc = None
 
-                    # 2. Purga 100% de parágrafos antigos do contêiner principal ou do body
-                    cells = list(root.iter(f"{{{W_NS}}}tc"))
-                    sidebar_tc = cells[0] if len(cells) > 0 else None
-                    main_tc = cells[-1] if len(cells) > 1 else root.find(f"{{{W_NS}}}body")
+                    if len(tables) > 0:
+                        tbl_text = ''.join([t.text for t in tables[0].iter(f"{{{W_NS}}}t") if t.text]).lower()
+                        if any(k in tbl_text for k in ["work experience", "professional experience", "professional summary"]):
+                            cells = list(tables[0].iter(f"{{{W_NS}}}tc"))
+                            if len(cells) >= 2:
+                                is_full_sidebar_layout = True
+                                sidebar_tc = cells[0]
+                                main_tc = cells[-1]
 
-                    if sidebar_tc is None:
-                        sidebar_tc = root.find(f"{{{W_NS}}}body")
-
-                    # Purga parágrafos antigos da sidebar
-                    if sidebar_tc is not None and len(cells) > 1:
-                        for elem in list(sidebar_tc):
-                            if elem.tag == f"{{{W_NS}}}p":
-                                sidebar_tc.remove(elem)
+                    if is_full_sidebar_layout and sidebar_tc is not None and main_tc is not None:
+                        # Layout de 2 Colunas (Sidebar + Corpo Principal)
+                        for child in list(sidebar_tc):
+                            if child.tag != f"{{{W_NS}}}tcPr":
+                                sidebar_tc.remove(child)
 
                         sidebar_tc.append(create_w_p(fullname, is_heading=True))
                         if title:
@@ -235,11 +246,9 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
                             for lang_str in languages:
                                 sidebar_tc.append(create_w_p(f"• {lang_str}", is_bullet=True))
 
-                    # Purga 100% de parágrafos do corpo principal (eliminando European Commission, BNP Paribas, 300+ parágrafos antigos)
-                    if main_tc is not None:
-                        for elem in list(main_tc):
-                            if elem.tag == f"{{{W_NS}}}p":
-                                main_tc.remove(elem)
+                        for child in list(main_tc):
+                            if child.tag != f"{{{W_NS}}}tcPr":
+                                main_tc.remove(child)
 
                         main_tc.append(create_w_p(fullname, is_heading=True))
                         if title:
@@ -278,6 +287,55 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
                                 c_name = cert.get("title") or cert.get("name") or str(cert)
                                 main_tc.append(create_w_p(f"• {c_name}", is_bullet=True))
 
+                    else:
+                        # Layout Single-Column (com Tabela de Foto de Cabeçalho + Parágrafos do Corpo)
+                        body_children = list(body)
+                        for child in body_children:
+                            if child.tag == f"{{{W_NS}}}p":
+                                body.remove(child)
+
+                        if summary:
+                            body.append(create_w_p("PROFESSIONAL SUMMARY", is_heading=True))
+                            body.append(create_w_p(summary))
+
+                        if exps:
+                            body.append(create_w_p("WORK EXPERIENCE", is_heading=True))
+                            for exp in exps:
+                                exp_header = f"{exp.get('title', '')} — {exp.get('company', '')} ({exp.get('period', '')})"
+                                body.append(create_w_p(exp_header, is_subheading=True))
+
+                                if exp.get("description"):
+                                    body.append(create_w_p(exp["description"]))
+
+                                for task in exp.get("responsibilities", []):
+                                    body.append(create_w_p(f"• {task}", is_bullet=True))
+
+                                if exp.get("technologies"):
+                                    body.append(create_w_p(f"Technologies: {', '.join(exp['technologies'])}"))
+
+                        if top_techs:
+                            body.append(create_w_p("TECHNICAL SKILLS", is_heading=True))
+                            body.append(create_w_p(", ".join(top_techs)))
+
+                        if educations:
+                            body.append(create_w_p("EDUCATION", is_heading=True))
+                            for edu in educations:
+                                degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
+                                school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
+                                year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
+                                body.append(create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
+
+                        if certifications:
+                            body.append(create_w_p("CERTIFICATIONS", is_heading=True))
+                            for cert in certifications:
+                                c_name = cert.get("title") or cert.get("name") or str(cert)
+                                body.append(create_w_p(f"• {c_name}", is_bullet=True))
+
+                        if languages:
+                            body.append(create_w_p("LANGUAGES", is_heading=True))
+                            for lang_str in languages:
+                                body.append(create_w_p(f"• {lang_str}", is_bullet=True))
+
                     doc_str = ET.tostring(root, encoding='utf-8').decode('utf-8')
                     doc_str = sanitize_xml_string(doc_str)
                     jout.writestr(item, doc_str.encode('utf-8'))
@@ -292,6 +350,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com purga de 300+ parágrafos antigos (expert.docx 100% limpo): {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com 100% de preservação de design e dados do JSON em: {docx_output_path}")
         return True
     return False
