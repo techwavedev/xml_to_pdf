@@ -9,6 +9,7 @@ Fluxo:
  1. Carrega os dados do CV em formato JSON (base única de dados).
  2. Converte automaticamente o JSON para HR-XML (padrão internacional ATS).
  3. Se for fornecido um arquivo .docx como template:
+    - Remove automaticamente todas as logos/imagens do rodapé (ex: logo SprintCV).
     - Converte o .docx nativo em PDF usando o Microsoft Word do macOS (100% de fidelidade visual exata).
     - Caso contrário, renderiza o template gráfico HTML/CSS escolhido via Playwright (Chromium).
  4. Injeta o XML gerado no PDF (anexo, metadados XMP e dicionário /Info).
@@ -26,6 +27,7 @@ from jinja2 import Template
 
 import json_to_xml
 import embed_xml_cv
+import clean_docx_completely
 
 CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 TEMPLATES_DIR = Path("templates")
@@ -63,7 +65,7 @@ def render_html_template(json_data: dict, template_name: str) -> str:
     with open(template_file, 'r', encoding='utf-8') as f:
         template_content = f.read()
 
-    # Carrega assets de imagem base64 (fundo, foto, logo) se disponíveis
+    # Carrega assets de imagem base64 (fundo, foto) se disponíveis
     if os.path.exists("assets/b64_assets.json"):
         try:
             with open("assets/b64_assets.json", "r") as f_b64:
@@ -72,8 +74,6 @@ def render_html_template(json_data: dict, template_name: str) -> str:
                     json_data["bg_b64"] = b64_data.get("bg", "")
                 if "photo_b64" not in json_data or not json_data["photo_b64"]:
                     json_data["photo_b64"] = b64_data.get("photo", "")
-                if "logo_b64" not in json_data or not json_data["logo_b64"]:
-                    json_data["logo_b64"] = b64_data.get("logo", "")
         except Exception:
             pass
 
@@ -159,10 +159,14 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
 
     temp_pdf = str(OUTPUT_DIR / "temp_rendered.pdf")
 
-    # 2. Se for especificado um arquivo .docx como modelo, converte via MS Word
+    # 2. Se for especificado um arquivo .docx como modelo, limpa os rodapés e converte via MS Word
     if docx_template and os.path.exists(docx_template):
         print(f"[*] Utilizando arquivo .docx nativo como modelo: {docx_template}")
-        success = convert_docx_to_pdf_word(docx_template, temp_pdf)
+        clean_docx = str(OUTPUT_DIR / "temp_clean_template.docx")
+        clean_docx_completely.clean_docx_footers(docx_template, clean_docx)
+        success = convert_docx_to_pdf_word(clean_docx, temp_pdf)
+        if os.path.exists(clean_docx):
+            os.remove(clean_docx)
         if not success:
             rendered_html = render_html_template(json_data, template_name)
             html_to_pdf(rendered_html, temp_pdf)
