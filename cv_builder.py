@@ -202,7 +202,7 @@ def build_cv_from_json(json_path: str, template_name: str = "sprintcv_docx", doc
     if docx_template and os.path.exists(docx_template):
         print(f"[*] Utilizando modelo .docx de entrada: {docx_template}")
         clean_docx = str(OUTPUT_DIR / f"{consultant_name}_clean.docx") if out_docx else str(OUTPUT_DIR / "temp_clean_template.docx")
-        clean_docx_completely.clean_docx_footers(docx_template, clean_docx)
+        clean_docx_completely.clean_docx_sprint(docx_template, clean_docx)
         
         # Converte o .docx para PDF de forma multiplataforma (macOS, Windows, Linux)
         success = convert_docx_to_pdf_cross_platform(clean_docx, temp_pdf)
