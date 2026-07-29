@@ -69,6 +69,5 @@ A pasta `output/`, os arquivos de saída `.pdf`, `.xml` extraídos e templates p
 - `embed_xml_cv.py`: Ferramenta principal em linha de comando (CLI) para incorporar, verificar e extrair XML em PDFs.
 - `sample_cv.xml`: Modelo padrão no formato HR-XML pronto para ser personalizado.
 - `output/`: Pasta de saída padrão para onde todos os PDFs e XMLs gerados são gravados (ignorada no Git).
-- `.gitignore`: Regras de exclusão do Git para não versionar CVs pessoais e saídas.
 - `generate_sample_pdf.py`: Script auxiliar para gerar um PDF de teste.
 - `requirements.txt`: Arquivo de dependências (`pypdf`).
