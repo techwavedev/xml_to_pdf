@@ -47,7 +47,7 @@
     "birthdate": "1990-01-01"
   },
   "present_job_title": "Senior DevOps & Cloud Specialist",
-  "about": "Senior DevOps & Cloud Solutions Engineer with 10+ years of experience in cloud infrastructure, CI/CD automation, Kubernetes orchestration, and system reliability engineering.",
+  "about": "Senior DevOps & Cloud Solutions Engineer with 7+ years of experience in cloud infrastructure, CI/CD automation, Kubernetes orchestration, and system reliability engineering.",
   "cv_summary": "- Over 10 years of experience in cloud infrastructure and enterprise DevOps engineering.\n- Extensive expertise in AWS and GCP cloud platforms, Terraform IaC, and Kubernetes orchestration.\n- Strong background in building CI/CD pipelines using GitHub Actions, GitLab CI, and Jenkins.\n- Skilled in monitoring and observability stacks (Prometheus, Grafana, ELK).",
   "technical_skills": "DevOps, Cloud Infrastructure, AWS, GCP, Azure, Terraform, Ansible, Docker, Kubernetes, Helm, GitLab CI, GitHub Actions, Jenkins, Prometheus, Grafana, Python, Bash, Go, PostgreSQL, Redis, Linux Administration.",
   "relevant_accomplishments": "• Architected high-availability cloud infrastructure on AWS reducing downtime by 99.99%.\n• Automated multi-region Kubernetes deployments cutting deployment times from hours to minutes.\n• Implemented FinOps cloud cost optimization strategies reducing annual infrastructure spend by 30%.",
@@ -152,12 +152,11 @@
       "location": "Austin, USA",
       "description": "Provided 3rd-line infrastructure support, virtualization management, and deployment automation.",
       "responsibilities": [
-        "Managed VMware ESXi virtualization cluster and Docker container environments.",
+        "Managed  cluster and Docker container environments.",
         "Built automated log aggregation and monitoring dashboards using ELK stack and Nagios."
       ],
       "technologies": [
         "Linux",
-        "VMware ESXi",
         "Docker",
         "ELK Stack",
         "Nagios",

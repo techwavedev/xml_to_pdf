@@ -42,25 +42,41 @@ def create_w_p(text: str, is_heading: bool = False, is_subheading: bool = False,
     r = ET.SubElement(p, f"{{{W_NS}}}r")
     rPr = ET.SubElement(r, f"{{{W_NS}}}rPr")
     
-    if is_heading:
-        b = ET.SubElement(rPr, f"{{{W_NS}}}b")
-    elif is_subheading:
+    if is_heading or is_subheading:
         b = ET.SubElement(rPr, f"{{{W_NS}}}b")
 
     t = ET.SubElement(r, f"{{{W_NS}}}t")
     t.text = text
     return p
 
+def extract_candidate_languages(json_data: dict) -> list:
+    langs = []
+    for m in json_data.get("mother_languages", []):
+        name = m.get("name") or m.get("language") or ""
+        level = m.get("written_name") or m.get("spoken_label") or "Native"
+        if name:
+            langs.append(f"{name} ({level})")
+
+    for o in json_data.get("other_languages", []):
+        name = o.get("name") or o.get("language") or ""
+        level = o.get("written_name") or o.get("spoken_label") or "Fluent"
+        if name:
+            langs.append(f"{name} ({level})")
+
+    if not langs and json_data.get("languages"):
+        for l in json_data["languages"]:
+            if isinstance(l, str):
+                langs.append(l)
+            elif isinstance(l, dict):
+                langs.append(f"{l.get('name') or l.get('language')} ({l.get('proficiency') or l.get('level', 'Fluent')})")
+
+    return langs
+
 def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
-    """
-    Substitui 100% dos dados de contatos e purga qualquer campo de autorização/endereço antigo 
-    que NÃO exista no feed JSON.
-    """
     consultant = json_data.get("consultant", {})
     name = consultant.get("name", "")
     surname = consultant.get("surname", "")
     fullname = f"{name} {surname}".strip()
-    title = json_data.get("present_job_title", "")
     email = consultant.get("email", "")
     phone = consultant.get("phone", "")
     city = consultant.get("city", "")
@@ -69,19 +85,15 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
     linkedin = consultant.get("linkedin", "")
     work_auth = consultant.get("work_authorization") or (f"{consultant.get('nationality')} Citizen" if consultant.get('nationality') else "")
 
-    # 1. Substituir E-mail
     if email:
         xml_str = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', html.escape(email, quote=False), xml_str)
 
-    # 2. Substituir LinkedIn (com ou sem http/https)
     if linkedin:
         xml_str = re.sub(r'(?i)(?:https?://)?(?:[a-z0-9-]+\.)*linkedin\.com/[^\s<"\']+', html.escape(linkedin, quote=False), xml_str)
 
-    # 3. Substituir Telefone
     if phone:
         xml_str = re.sub(r'(\+\d{1,4}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}', html.escape(phone, quote=False), xml_str)
 
-    # 4. Substituir Localização e Cidades Antigas
     if location:
         xml_str = re.sub(r'Aveiro\s*,\s*Portugal', html.escape(location, quote=False), xml_str)
         xml_str = re.sub(r'Itapema,\s*SC', html.escape(location, quote=False), xml_str)
@@ -91,7 +103,6 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
         if country:
             xml_str = re.sub(r'(?i)\bportugal\b', html.escape(country, quote=False), xml_str)
 
-    # 5. Substituir Nomes Divididos
     if fullname:
         xml_str = re.sub(r'(?i)elton\s+machado', html.escape(fullname, quote=False), xml_str)
         if name:
@@ -99,12 +110,10 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
         if surname:
             xml_str = re.sub(r'(?i)\bmachado\b', html.escape(surname, quote=False), xml_str)
 
-    # 6. Purga ou Substitui Autorização de Trabalho / Cidadania Antiga (Work Authorization)
     if work_auth:
         xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', html.escape(work_auth, quote=False), xml_str)
         xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', html.escape(work_auth, quote=False), xml_str)
     else:
-        # Se não estiver no JSON, apaga o texto de autorização de trabalho do modelo antigo
         xml_str = re.sub(r'(?i)Work\s+Authorization:[^\n<"\']*', '', xml_str)
         xml_str = re.sub(r'(?i)EU\s+Citizen[^\n<"\']*', '', xml_str)
         xml_str = re.sub(r'(?i)Belgian,\s*Portuguese,\s*Brazilian', '', xml_str)
@@ -112,6 +121,10 @@ def replace_dynamic_contact_regex(xml_str: str, json_data: dict) -> str:
     return xml_str
 
 def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
+    """
+    Purga 100% de tabelas e parágrafos de tecnologias antigas (ex: NSX, VMware NSX, Active Directory, LDAP...)
+    e reconstrói as seções EXCLUSIVAMENTE a partir do feed JSON fornecido.
+    """
     consultant = json_data.get("consultant", {})
     fullname = f"{consultant.get('name', '')} {consultant.get('surname', '')}".strip()
     title = json_data.get("present_job_title", "")
@@ -120,7 +133,7 @@ def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
     exps = json_data.get("work_experiences", [])
     educations = json_data.get("educations", [])
     certifications = json_data.get("certifications", [])
-    languages = json_data.get("languages", [])
+    languages = extract_candidate_languages(json_data)
     top_techs_raw = json_data.get("top_technologies") or []
     top_techs = [format_tech_item(t) for t in top_techs_raw]
 
@@ -128,6 +141,35 @@ def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
         doc_xml = replace_dynamic_contact_regex(doc_xml, json_data)
         root = ET.fromstring(doc_xml)
 
+        # 1. Purga total de tabelas secundárias de habilidades do modelo antigo (contendo NSX, VMware, LDAP...)
+        tables_to_remove = []
+        for tbl in root.iter(f"{{{W_NS}}}tbl"):
+            text = ''.join([t.text for t in tbl.iter(f"{{{W_NS}}}t") if t.text]).strip()
+            # Se for uma tabela de matriz de tecnologias antigas (com NSX, vSphere, LDAP, etc.)
+            if any(old_k in text for old_k in ['NSX', 'VMware ESX', 'Active Directory', 'LDAP', 'Microsoft Exchange', 'vSphere', 'Courier-IMAP', 'Open-E', 'Microsoft DFS']):
+                tables_to_remove.append(tbl)
+
+        for tbl in tables_to_remove:
+            try:
+                # Remove a tabela do seu contêiner pai
+                for parent in root.iter():
+                    if tbl in list(parent):
+                        parent.remove(tbl)
+                        break
+            except Exception:
+                pass
+
+        # 2. Limpa nós de texto em parágrafos que ainda contenham NSX ou dados não pertencentes ao JSON
+        for p in root.iter(f"{{{W_NS}}}p"):
+            text = ''.join([t.text for t in p.iter(f"{{{W_NS}}}t") if t.text]).strip()
+            if any(old_k in text for old_k in [
+                'NSX', 'Portuguese', 'Dutch', 'HashiCorp Certified', 'Udemy', 'HackerRank',
+                'Lusófona', 'Universidade Aberta', 'Escola de Negócios', 'European Commission', 'BNP Paribas'
+            ]):
+                for t in p.iter(f"{{{W_NS}}}t"):
+                    t.text = ""
+
+        # 3. Localiza o contêiner principal (<w:tc> ou body) para injeção limpa das seções do JSON
         main_tc = None
         for tc in root.iter(f"{{{W_NS}}}tc"):
             text = ''.join([t.text for t in tc.iter(f"{{{W_NS}}}t") if t.text]).strip()
@@ -192,9 +234,9 @@ def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
                     main_tc.insert(insert_pos, create_w_p("EDUCATION", is_heading=True))
                     insert_pos += 1
                     for edu in educations:
-                        degree = edu.get("degree") or edu.get("course") or ""
-                        school = edu.get("institution") or edu.get("school") or ""
-                        year = edu.get("year") or edu.get("period") or ""
+                        degree = edu.get("degree") or edu.get("course_name") or edu.get("course") or ""
+                        school = edu.get("institution") or edu.get("course_institution") or edu.get("school") or ""
+                        year = edu.get("year") or edu.get("course_end_date_year") or edu.get("period") or ""
                         main_tc.insert(insert_pos, create_w_p(f"{degree} — {school} ({year})", is_subheading=True))
                         insert_pos += 1
 
@@ -209,10 +251,8 @@ def safe_populate_document_xml(doc_xml: str, json_data: dict) -> str:
                 if languages:
                     main_tc.insert(insert_pos, create_w_p("LANGUAGES", is_heading=True))
                     insert_pos += 1
-                    for lang in languages:
-                        l_name = lang.get("language") or lang.get("name") or str(lang)
-                        l_level = lang.get("proficiency") or lang.get("level") or ""
-                        main_tc.insert(insert_pos, create_w_p(f"• {l_name}: {l_level}", is_bullet=True))
+                    for lang_str in languages:
+                        main_tc.insert(insert_pos, create_w_p(f"• {lang_str}", is_bullet=True))
                         insert_pos += 1
 
         return ET.tostring(root, encoding='utf-8').decode('utf-8')
@@ -270,6 +310,6 @@ def populate_docx_from_json(docx_input_path: str, docx_output_path: str, json_da
 
     if os.path.exists(temp_zip):
         os.replace(temp_zip, docx_output_path)
-        print(f"[✓] Documento DOCX populado com purga total de campos não mapeados: {docx_output_path}")
+        print(f"[✓] Documento DOCX populado com purga total de tabelas de habilidades antigas (ex: NSX): {docx_output_path}")
         return True
     return False
